@@ -10,16 +10,14 @@ contract FactoryV1 {
     function createDistributor(
         address _token,
         address _baseToken,
-        uint256 _epochTime,
-        uint256 _reward,
+        uint256 _epochDuration,
         uint256 _startTimestamp,
         Hook memory _drainHook
     ) external returns (address distributorAddress) {
         DistributorV1 distributor = new DistributorV1(
             _token,
             _baseToken,
-            _epochTime,
-            _reward,
+            _epochDuration,
             _startTimestamp,
             _drainHook
         );
