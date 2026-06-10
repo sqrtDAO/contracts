@@ -1,17 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {Hook, HookFailure} from "src/utils/Hook.sol";
-import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
 import {
     IEmissionFunction
 } from "src/utils/emission-function/IEmissionFunction.sol";
 
-contract FixedEmissionFunction is IEmissionFunction {
-    function rewardOf(
-        uint256 _initialReward,
-        uint256 _currentEpoch
-    ) external returns (uint256 reward) {
-        return _initialReward;
+contract FixedEmission is IEmissionFunction {
+    function calculate(
+        bytes calldata _curveConfig,
+        uint256 _epochNumber
+    ) external pure returns (uint256 reward) {
+        FixedEmissionConfig memory config = abi.decode(
+            _curveConfig,
+            (FixedEmissionConfig)
+        );
+        return config.amount;
     }
+}
+
+struct FixedEmissionConfig {
+    uint256 amount;
 }
