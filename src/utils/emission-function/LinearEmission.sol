@@ -17,11 +17,11 @@ contract LinearEmission is IEmissionFunction {
         int256 iReward = int256(config.base) +
             (config.slope * int256(_epochNumber));
 
-        if (reward < 0) {
+        if (iReward < 0) {
             return 0;
         }
 
-        return uint256(reward);
+        return uint256(iReward);
     }
 }
 
