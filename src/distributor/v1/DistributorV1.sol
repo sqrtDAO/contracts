@@ -11,31 +11,47 @@ import {
 /// @notice Base template for distributor contracts that perform token transfers to recipients.
 /// @dev Extend this contract for versioned implementations like `DistributorV1`.
 contract DistributorV1 {
-    IERC20 public immutable TOKEN;
-    IERC20 public immutable BASE_TOKEN;
+    event Participated(
+        address indexed participant,
+        uint256 fromEpoch,
+        uint256 numEpochs,
+        uint256 amountPerEpoch
+    );
+    event Claimed(
+        address indexed claimant,
+        uint256 fromEpoch,
+        uint256 numEpochs,
+        uint256 totalClaimed
+    );
+
+    IERC20 public immutable DISTRIBUTION_TOKEN;
+    IERC20 public immutable PARTICIPATION_TOKEN;
     uint256 public immutable EPOCH_DURATION;
     uint256 public immutable STARTING_TIMESTAMP;
 
     EmissionFunction public emissionFunction;
     Hook public drainHook;
 
+    mapping(uint256 => uint256) public epochTotal;
+    mapping(uint256 => mapping(address => uint256)) public epochUser;
+
     /**
-     * @param _token address of token you want to distribute
-     * @param _baseToken address of token contract receive in epochs when user participate
+     * @param _distributionToken address of token you want to distribute
+     * @param _participationToken address of token contract receive in epochs when user participate
      * @param _epochDuration duration of each epoch (in seconds)
      * @param _startTimestamp time of first epoch starts
      * @param _drainHook contract calls this hook after epoch ends (on first claim)
      */
     constructor(
-        address _token,
-        address _baseToken,
+        address _distributionToken,
+        address _participationToken,
         uint256 _epochDuration,
         uint256 _startTimestamp,
         Hook memory _drainHook,
         EmissionFunction memory _emissionFunction
     ) {
-        TOKEN = IERC20(_token);
-        BASE_TOKEN = IERC20(_baseToken);
+        DISTRIBUTION_TOKEN = IERC20(_distributionToken);
+        PARTICIPATION_TOKEN = IERC20(_participationToken);
         EPOCH_DURATION = _epochDuration;
         STARTING_TIMESTAMP = _startTimestamp;
         drainHook = _drainHook;
@@ -68,11 +84,55 @@ contract DistributorV1 {
             );
     }
 
+    /**
+     * @notice Allows a user to participate in the reward program by locking tokens for multiple epochs.
+     * @dev This function updates the user's participation in the specified number of epochs and transfers the required amount of PARTICIPATION_TOKEN tokens to the contract.
+     * @param _amountPerEpoch The amount of tokens to lock per epoch.
+     * @param _numEpochs The number of epochs to participate in.
+     */
+    function participate(uint256 _amountPerEpoch, uint256 _numEpochs) external {
+        require(_numEpochs != 0, "Invalid epoch number.");
+        uint256 currEpoch = currentEpoch();
+        for (uint256 i = 0; i < _numEpochs; i++) {
+            epochTotal[currEpoch + i] += _amountPerEpoch;
+            epochUser[currEpoch + i][msg.sender] += _amountPerEpoch;
+        }
+        require(
+            PARTICIPATION_TOKEN.transferFrom(
+                msg.sender,
+                address(this),
+                _numEpochs * _amountPerEpoch
+            ),
+            "TF"
+        );
+        emit Participated(msg.sender, currEpoch, _numEpochs, _amountPerEpoch);
+    }
+
+    /**
+     * @notice Allows a user to claim their rewards for participation in past epochs.
+     * @dev This function calculates and mints the reward based on the user's participation and the total participation in each epoch.
+     * @param _startingEpoch The starting epoch number from which to claim rewards.
+     * @param _numEpochs The number of epochs to claim rewards for.
+     */
+    function claim(
+        uint256 _startingEpoch,
+        uint256 _numEpochs
+    ) public returns (uint256 claimAmount) {
+        claimAmount = 0;
+        for (uint256 i = 0; i < _numEpochs; i++) {
+            claimAmount += epochUser[_startingEpoch + i][msg.sender];
+            epochUser[_startingEpoch + i][msg.sender] = 0;
+        }
+
+        require(DISTRIBUTION_TOKEN.transfer(msg.sender, claimAmount), "TF");
+        emit Claimed(msg.sender, _startingEpoch, _numEpochs, claimAmount);
+    }
+
     function _callDrainHook() internal returns (bytes memory) {
         // approve so drainHook contract can control distributor contract tokens
-        BASE_TOKEN.approve(
+        PARTICIPATION_TOKEN.approve(
             drainHook.contractAddress,
-            BASE_TOKEN.balanceOf(address(this))
+            PARTICIPATION_TOKEN.balanceOf(address(this))
         );
 
         (bool success, bytes memory result) = drainHook.contractAddress.call(
