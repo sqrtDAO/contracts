@@ -3,6 +3,9 @@ pragma solidity ^0.8.13;
 
 import {Hook, HookFailure} from "src/utils/Hook.sol";
 import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
+import {
+    EmissionFunction
+} from "src/utils/emission-function/EmissionFunction.sol";
 
 /// @title Distributor
 /// @notice Base template for distributor contracts that perform token transfers to recipients.
@@ -11,7 +14,9 @@ contract DistributorV1 {
     IERC20 public immutable TOKEN;
     IERC20 public immutable BASE_TOKEN;
     uint256 public immutable EPOCH_DURATION;
-    uint256 public immutable START_TIMESTAMP;
+    uint256 public immutable STARTING_TIMESTAMP;
+
+    EmissionFunction public emissionFunction;
     Hook public drainHook;
 
     /**
@@ -26,13 +31,41 @@ contract DistributorV1 {
         address _baseToken,
         uint256 _epochDuration,
         uint256 _startTimestamp,
-        Hook memory _drainHook
+        Hook memory _drainHook,
+        EmissionFunction memory _emissionFunction
     ) {
         TOKEN = IERC20(_token);
         BASE_TOKEN = IERC20(_baseToken);
         EPOCH_DURATION = _epochDuration;
-        START_TIMESTAMP = _startTimestamp;
+        STARTING_TIMESTAMP = _startTimestamp;
         drainHook = _drainHook;
+        emissionFunction = _emissionFunction;
+    }
+
+    /**
+     * @notice Returns the current epoch number based on the starting block and blocks per epoch.
+     * @dev The epoch number is calculated by dividing the number of blocks since the starting block by the number of blocks per epoch.
+     * @return The current epoch number.
+     */
+    function currentEpoch() public view returns (uint256) {
+        require(
+            block.timestamp >= STARTING_TIMESTAMP,
+            "Mining has not started yet!"
+        );
+        return (block.timestamp - STARTING_TIMESTAMP) / EPOCH_DURATION;
+    }
+
+    /**
+     * @notice Computes reward of an specific epoch.
+     * @dev It will used the cached reward to speed things up.
+     * @param epoch The epoch to calculate reward for.
+     */
+    function rewardOf(uint256 epoch) public view returns (uint256) {
+        return
+            emissionFunction.emissionContract.calculate(
+                emissionFunction.curveConfig,
+                epoch
+            );
     }
 
     function _callDrainHook() internal returns (bytes memory) {
