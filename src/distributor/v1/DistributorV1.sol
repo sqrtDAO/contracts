@@ -16,6 +16,8 @@ contract DistributorV1 {
     IERC20 public immutable PARTICIPATION_TOKEN;
     uint256 public immutable EPOCH_DURATION;
     uint256 public immutable STARTING_TIMESTAMP;
+    uint256 public immutable PROTOCOL_FEE_INV;
+    address public immutable PROTOCOL_FEE_RECEIVER;
 
     EmissionFunction public emissionFunction;
     Hook public drainHook;
@@ -31,13 +33,18 @@ contract DistributorV1 {
      * @param _participationToken address of token contract receive in epochs when user participate
      * @param _epochDuration duration of each epoch (in seconds)
      * @param _startTimestamp time of first epoch starts
+     * @param _protocolFeeInv drainAmount/_protocolFeeInv = protocol fee amount e.g. 200 means 0.5%
+     * @param _protocolFeeReceiver address that receives protocol fee
      * @param _drainHook contract calls this hook after epoch ends (on first claim)
+     * @param _emissionFunction calculates reward of an epoch can be a curve or linear function
      */
     constructor(
         address _distributionToken,
         address _participationToken,
         uint256 _epochDuration,
         uint256 _startTimestamp,
+        uint256 _protocolFeeInv,
+        address _protocolFeeReceiver,
         Hook memory _drainHook,
         EmissionFunction memory _emissionFunction
     ) {
@@ -45,6 +52,8 @@ contract DistributorV1 {
         PARTICIPATION_TOKEN = IERC20(_participationToken);
         EPOCH_DURATION = _epochDuration;
         STARTING_TIMESTAMP = _startTimestamp;
+        PROTOCOL_FEE_INV = _protocolFeeInv;
+        PROTOCOL_FEE_RECEIVER = _protocolFeeReceiver;
         drainHook = _drainHook;
         emissionFunction = _emissionFunction;
     }
@@ -114,6 +123,13 @@ contract DistributorV1 {
     }
 
     function _callDrainHook() internal returns (bytes memory) {
+        require(
+            PARTICIPATION_TOKEN.transfer(
+                PROTOCOL_FEE_RECEIVER, PARTICIPATION_TOKEN.balanceOf(address(this)) / PROTOCOL_FEE_INV
+            ),
+            "transfer failed"
+        );
+
         // approve so drainHook contract can control distributor contract tokens
         PARTICIPATION_TOKEN.approve(drainHook.contractAddress, PARTICIPATION_TOKEN.balanceOf(address(this)));
 

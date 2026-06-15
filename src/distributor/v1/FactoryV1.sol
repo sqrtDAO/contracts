@@ -13,11 +13,20 @@ contract FactoryV1 {
         address _baseToken,
         uint256 _epochDuration,
         uint256 _startTimestamp,
+        uint256 _protocolFeeInv,
+        address _protocolFeeReceiver,
         Hook memory _drainHook,
         EmissionFunction memory _emissionFunction
     ) external returns (address distributorAddress) {
         DistributorV1 distributor = new DistributorV1(
-            _token, _baseToken, _epochDuration, _startTimestamp, _drainHook, _emissionFunction
+            _token,
+            _baseToken,
+            _epochDuration,
+            _startTimestamp,
+            _protocolFeeInv,
+            _protocolFeeReceiver,
+            _drainHook,
+            _emissionFunction
         );
 
         distributorAddress = address(distributor);
