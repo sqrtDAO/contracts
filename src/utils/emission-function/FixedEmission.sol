@@ -1,19 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {
-    IEmissionFunction
-} from "src/utils/emission-function/IEmissionFunction.sol";
+import {IEmissionFunction} from "src/utils/emission-function/IEmissionFunction.sol";
 
 contract FixedEmission is IEmissionFunction {
-    function calculate(
-        bytes calldata _curveConfig,
-        uint256 _epochNumber
-    ) external pure returns (uint256 reward) {
-        FixedEmissionConfig memory config = abi.decode(
-            _curveConfig,
-            (FixedEmissionConfig)
-        );
+    function calculate(bytes calldata _curveConfig, uint256 _epochNumber) external pure returns (uint256 reward) {
+        FixedEmissionConfig memory config = abi.decode(_curveConfig, (FixedEmissionConfig));
         return config.amount;
     }
 }
