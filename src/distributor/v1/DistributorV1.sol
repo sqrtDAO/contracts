@@ -3,26 +3,14 @@ pragma solidity ^0.8.13;
 
 import {Hook, HookFailure} from "src/utils/Hook.sol";
 import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
-import {
-    EmissionFunction
-} from "src/utils/emission-function/EmissionFunction.sol";
+import {EmissionFunction} from "src/utils/emission-function/EmissionFunction.sol";
 
 /// @title Distributor
 /// @notice Base template for distributor contracts that perform token transfers to recipients.
 /// @dev Extend this contract for versioned implementations like `DistributorV1`.
 contract DistributorV1 {
-    event Participated(
-        address indexed participant,
-        uint256 fromEpoch,
-        uint256 numEpochs,
-        uint256 amountPerEpoch
-    );
-    event Claimed(
-        address indexed claimant,
-        uint256 fromEpoch,
-        uint256 numEpochs,
-        uint256 totalClaimed
-    );
+    event Participated(address indexed participant, uint256 fromEpoch, uint256 numEpochs, uint256 amountPerEpoch);
+    event Claimed(address indexed claimant, uint256 fromEpoch, uint256 numEpochs, uint256 totalClaimed);
 
     IERC20 public immutable DISTRIBUTION_TOKEN;
     IERC20 public immutable PARTICIPATION_TOKEN;
@@ -32,8 +20,11 @@ contract DistributorV1 {
     EmissionFunction public emissionFunction;
     Hook public drainHook;
 
-    mapping(uint256 => uint256) public epochTotal;
-    mapping(uint256 => mapping(address => uint256)) public epochUser;
+    // total amount users participated to an epoch
+    mapping(uint256 => uint256) public epochTotalParticipation;
+
+    // amount user participated to an epoch (sets to zero on claim)
+    mapping(uint256 => mapping(address => uint256)) public epochUserParticipation;
 
     /**
      * @param _distributionToken address of token you want to distribute
@@ -59,29 +50,21 @@ contract DistributorV1 {
     }
 
     /**
-     * @notice Returns the current epoch number based on the starting block and blocks per epoch.
-     * @dev The epoch number is calculated by dividing the number of blocks since the starting block by the number of blocks per epoch.
+     * @notice Returns the current epoch number based on the starting block and block timestamp
      * @return The current epoch number.
      */
     function currentEpoch() public view returns (uint256) {
-        require(
-            block.timestamp >= STARTING_TIMESTAMP,
-            "Mining has not started yet!"
-        );
+        require(block.timestamp >= STARTING_TIMESTAMP, "Mining has not started yet!");
         return (block.timestamp - STARTING_TIMESTAMP) / EPOCH_DURATION;
     }
 
     /**
      * @notice Computes reward of an specific epoch.
-     * @dev It will used the cached reward to speed things up.
      * @param epoch The epoch to calculate reward for.
+     * @return reward amount
      */
     function rewardOf(uint256 epoch) public view returns (uint256) {
-        return
-            emissionFunction.emissionContract.calculate(
-                emissionFunction.curveConfig,
-                epoch
-            );
+        return emissionFunction.emissionContract.calculate(emissionFunction.curveConfig, epoch);
     }
 
     /**
@@ -92,58 +75,53 @@ contract DistributorV1 {
      */
     function participate(uint256 _amountPerEpoch, uint256 _numEpochs) external {
         require(_numEpochs != 0, "Invalid epoch number.");
+        require(
+            PARTICIPATION_TOKEN.transferFrom(msg.sender, address(this), _numEpochs * _amountPerEpoch),
+            "transferFrom failed"
+        );
+
         uint256 currEpoch = currentEpoch();
         for (uint256 i = 0; i < _numEpochs; i++) {
-            epochTotal[currEpoch + i] += _amountPerEpoch;
-            epochUser[currEpoch + i][msg.sender] += _amountPerEpoch;
+            epochTotalParticipation[currEpoch + i] += _amountPerEpoch;
+            epochUserParticipation[currEpoch + i][msg.sender] += _amountPerEpoch;
         }
-        require(
-            PARTICIPATION_TOKEN.transferFrom(
-                msg.sender,
-                address(this),
-                _numEpochs * _amountPerEpoch
-            ),
-            "TF"
-        );
         emit Participated(msg.sender, currEpoch, _numEpochs, _amountPerEpoch);
     }
 
     /**
      * @notice Allows a user to claim their rewards for participation in past epochs.
-     * @dev This function calculates and mints the reward based on the user's participation and the total participation in each epoch.
+     * @dev Calculates pro-rata reward share using (userAmount / epochTotal) * rewardOf(epoch).
      * @param _startingEpoch The starting epoch number from which to claim rewards.
      * @param _numEpochs The number of epochs to claim rewards for.
      */
-    function claim(
-        uint256 _startingEpoch,
-        uint256 _numEpochs
-    ) public returns (uint256 claimAmount) {
+    function claim(uint256 _startingEpoch, uint256 _numEpochs) public returns (uint256 claimAmount) {
+        require(_startingEpoch + _numEpochs - 1 < currentEpoch(), "Future epoch");
+
         claimAmount = 0;
         for (uint256 i = 0; i < _numEpochs; i++) {
-            claimAmount += epochUser[_startingEpoch + i][msg.sender];
-            epochUser[_startingEpoch + i][msg.sender] = 0;
+            uint256 epoch = _startingEpoch + i;
+
+            claimAmount += (epochUserParticipation[epoch][msg.sender] * rewardOf(epoch))
+                / epochTotalParticipation[epoch];
+            epochUserParticipation[epoch][msg.sender] = 0; // prevents double claim
         }
 
-        require(DISTRIBUTION_TOKEN.transfer(msg.sender, claimAmount), "TF");
+        if (claimAmount > 0) {
+            require(DISTRIBUTION_TOKEN.transfer(msg.sender, claimAmount), "transfer failed");
+        }
         emit Claimed(msg.sender, _startingEpoch, _numEpochs, claimAmount);
     }
 
     function _callDrainHook() internal returns (bytes memory) {
         // approve so drainHook contract can control distributor contract tokens
-        PARTICIPATION_TOKEN.approve(
-            drainHook.contractAddress,
-            PARTICIPATION_TOKEN.balanceOf(address(this))
-        );
+        PARTICIPATION_TOKEN.approve(drainHook.contractAddress, PARTICIPATION_TOKEN.balanceOf(address(this)));
 
-        (bool success, bytes memory result) = drainHook.contractAddress.call(
-            drainHook.callData
-        );
+        (bool success, bytes memory result) = drainHook.contractAddress.call(drainHook.callData);
 
         if (!success) {
             emit HookFailure(result);
         }
 
-        require(success, "Distributor: hook call failed");
         return result;
     }
 }
