@@ -18,6 +18,7 @@ contract DistributorV1 {
     uint256 public immutable STARTING_TIMESTAMP;
     uint256 public immutable PROTOCOL_FEE_INV;
     address public immutable PROTOCOL_FEE_RECEIVER;
+    uint256 public immutable MIN_PARTICIPATION;
     uint256 public immutable CLAIM_DELAY_EPOCHS;
 
     EmissionFunction public emissionFunction;
@@ -36,6 +37,7 @@ contract DistributorV1 {
      * @param _startTimestamp time of first epoch starts
      * @param _protocolFeeInv drainAmount/_protocolFeeInv = protocol fee amount e.g. 200 means 0.5%
      * @param _protocolFeeReceiver address that receives protocol fee
+     * @param _minParticipation minimum amount per-epoch a participant must provide
      * @param _claimDelayEpochs number of epochs a user must wait after an epoch ends before claiming
      * @param _drainHook contract calls this hook after epoch ends (on first claim)
      * @param _emissionFunction calculates reward of an epoch can be a curve or linear function
@@ -47,6 +49,7 @@ contract DistributorV1 {
         uint256 _startTimestamp,
         uint256 _protocolFeeInv,
         address _protocolFeeReceiver,
+        uint256 _minParticipation,
         uint256 _claimDelayEpochs,
         Hook memory _drainHook,
         EmissionFunction memory _emissionFunction
@@ -57,6 +60,7 @@ contract DistributorV1 {
         STARTING_TIMESTAMP = _startTimestamp;
         PROTOCOL_FEE_INV = _protocolFeeInv;
         PROTOCOL_FEE_RECEIVER = _protocolFeeReceiver;
+        MIN_PARTICIPATION = _minParticipation;
         CLAIM_DELAY_EPOCHS = _claimDelayEpochs;
         drainHook = _drainHook;
         emissionFunction = _emissionFunction;
@@ -88,6 +92,7 @@ contract DistributorV1 {
      */
     function participate(uint256 _amountPerEpoch, uint256 _numEpochs) external {
         require(_numEpochs != 0, "Invalid epoch number.");
+        require(_amountPerEpoch >= MIN_PARTICIPATION, "Amount below minimum");
         uint256 currEpoch = currentEpoch();
         require(rewardOf(currEpoch) < DISTRIBUTION_TOKEN.balanceOf(address(this)), "No more token to distribute");
         require(

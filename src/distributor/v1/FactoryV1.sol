@@ -15,6 +15,7 @@ contract FactoryV1 {
         uint256 _startTimestamp,
         uint256 _protocolFeeInv,
         address _protocolFeeReceiver,
+        uint256 _minParticipation,
         uint256 _claimDelayEpochs,
         Hook memory _drainHook,
         EmissionFunction memory _emissionFunction
@@ -26,6 +27,7 @@ contract FactoryV1 {
             _startTimestamp,
             _protocolFeeInv,
             _protocolFeeReceiver,
+            _minParticipation,
             _claimDelayEpochs,
             _drainHook,
             _emissionFunction
