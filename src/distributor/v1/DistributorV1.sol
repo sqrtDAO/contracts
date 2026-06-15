@@ -30,6 +30,9 @@ contract DistributorV1 {
     // amount user participated to an epoch (sets to zero on claim)
     mapping(uint256 => mapping(address => uint256)) public epochUserParticipation;
 
+    // tracks which epochs have had their drain hook called
+    uint256 public nextDrainHookToCall = 0;
+
     /**
      * @param _distributionToken address of token you want to distribute
      * @param _participationToken address of token contract receive in epochs when user participate
@@ -110,11 +113,18 @@ contract DistributorV1 {
     /**
      * @notice Allows a user to claim their rewards for participation in past epochs.
      * @dev Calculates pro-rata reward share using (userAmount / epochTotal) * rewardOf(epoch).
+     * Calls drain hook on first claim after each epoch finishes.
      * @param _startingEpoch The starting epoch number from which to claim rewards.
      * @param _numEpochs The number of epochs to claim rewards for.
      */
     function claim(uint256 _startingEpoch, uint256 _numEpochs) public returns (uint256 claimAmount) {
-        require(_startingEpoch + _numEpochs + CLAIM_DELAY_EPOCHS - 1 < currentEpoch(), "Too soon to claim");
+        uint256 currEpoch = currentEpoch();
+        require(_startingEpoch + _numEpochs + CLAIM_DELAY_EPOCHS - 1 < currEpoch, "Too soon to claim");
+
+        if (nextDrainHookToCall < currEpoch) {
+            callDrainHook();
+            nextDrainHookToCall = currEpoch;
+        }
 
         claimAmount = 0;
         for (uint256 i = 0; i < _numEpochs; i++) {
@@ -131,7 +141,10 @@ contract DistributorV1 {
         emit Claimed(msg.sender, _startingEpoch, _numEpochs, claimAmount);
     }
 
-    function _callDrainHook() internal returns (bytes memory) {
+    /**
+     * @notice this function not necessary called for each epoch it get called when someone call claim and will drain everything that is not already drained!
+     */
+    function callDrainHook() public returns (bytes memory) {
         require(
             PARTICIPATION_TOKEN.transfer(
                 PROTOCOL_FEE_RECEIVER, PARTICIPATION_TOKEN.balanceOf(address(this)) / PROTOCOL_FEE_INV
