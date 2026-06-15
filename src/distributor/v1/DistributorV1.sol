@@ -75,12 +75,13 @@ contract DistributorV1 {
      */
     function participate(uint256 _amountPerEpoch, uint256 _numEpochs) external {
         require(_numEpochs != 0, "Invalid epoch number.");
+        uint256 currEpoch = currentEpoch();
+        require(rewardOf(currEpoch) < DISTRIBUTION_TOKEN.balanceOf(address(this)), "No more token to distribute");
         require(
             PARTICIPATION_TOKEN.transferFrom(msg.sender, address(this), _numEpochs * _amountPerEpoch),
             "transferFrom failed"
         );
 
-        uint256 currEpoch = currentEpoch();
         for (uint256 i = 0; i < _numEpochs; i++) {
             epochTotalParticipation[currEpoch + i] += _amountPerEpoch;
             epochUserParticipation[currEpoch + i][msg.sender] += _amountPerEpoch;
