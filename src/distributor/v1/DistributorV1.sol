@@ -88,6 +88,37 @@ contract DistributorV1 {
     }
 
     /**
+     * @notice used to read epochs information
+     * @dev pass 0,0 as range if you only want to read general emission information
+     * @param user The epoch to calculate reward for.
+     * @param range of epochs to get info
+     * @return result information of epochs in an specified range
+     */
+    function getInfo(address user, Range calldata range) external view returns (GetInfoResult memory result) {
+        EpochInfo[] memory epochs = new EpochInfo[](range.length);
+
+        for (uint256 i = 0; i < range.length; i++) {
+            uint256 epoch = range.from + i;
+            epochs[i] = EpochInfo({
+                userParticipationAmount: epochUserParticipation[epoch][user],
+                totalParticipationAmount: epochTotalParticipation[epoch],
+                rewardAmount: rewardOf(epoch)
+            });
+        }
+
+        return GetInfoResult({
+            distributionToken: address(DISTRIBUTION_TOKEN),
+            participationToken: address(PARTICIPATION_TOKEN),
+            epochDuration: EPOCH_DURATION,
+            startingTimestamp: STARTING_TIMESTAMP,
+            minParticipation: MIN_PARTICIPATION,
+            claimDelayEpochs: CLAIM_DELAY_EPOCHS,
+            remainingRewards: DISTRIBUTION_TOKEN.balanceOf(address(this)),
+            epochs: epochs
+        });
+    }
+
+    /**
      * @notice this function finds non zero rewards epochs for specific user
      * @dev used to show what is claimable to the user
      * @param _fromEpoch starts search from this epoch
@@ -221,4 +252,31 @@ contract DistributorV1 {
 struct Range {
     uint256 from;
     uint256 length;
+}
+
+struct GetInfoResult {
+    address distributionToken;
+    address participationToken;
+
+    uint256 epochDuration;
+    uint256 startingTimestamp;
+    // currentEpoch can be calculated => (NOW - STARTING_TIMESTAMP) / EPOCH_DURATION
+
+    uint256 minParticipation;
+    uint256 claimDelayEpochs;
+
+    uint256 remainingRewards;
+
+    EpochInfo[] epochs;
+}
+
+struct EpochInfo {
+    // epochNumber can be calculated => RANGE.from + INDEX
+
+    uint256 userParticipationAmount;
+    uint256 totalParticipationAmount;
+
+    uint256 rewardAmount;
+    // epochPassedTime can be calculated => (NOW - STARTING_TIMESTAMP) % EPOCH_DURATION
+    // epochRemainingTime can be calculated => EPOCH_DURATION - epochPassedTime
 }
