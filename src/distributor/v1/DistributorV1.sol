@@ -114,12 +114,11 @@ contract DistributorV1 {
      * @notice Allows a user to claim their rewards for participation in past epochs.
      * @dev Calculates pro-rata reward share using (userAmount / epochTotal) * rewardOf(epoch).
      * Calls drain hook on first claim after each epoch finishes.
-     * @param _startingEpoch The starting epoch number from which to claim rewards.
-     * @param _numEpochs The number of epochs to claim rewards for.
+     * @param _range from and length.
      */
-    function claim(uint256 _startingEpoch, uint256 _numEpochs) public returns (uint256 claimAmount) {
+    function claim(Range calldata _range) public returns (uint256 claimAmount) {
         uint256 currEpoch = currentEpoch();
-        require(_startingEpoch + _numEpochs + CLAIM_DELAY_EPOCHS - 1 < currEpoch, "Too soon to claim");
+        require(_range.from + _range.length + CLAIM_DELAY_EPOCHS - 1 < currEpoch, "Too soon to claim");
 
         if (nextDrainHookToCall < currEpoch) {
             callDrainHook();
@@ -127,8 +126,8 @@ contract DistributorV1 {
         }
 
         claimAmount = 0;
-        for (uint256 i = 0; i < _numEpochs; i++) {
-            uint256 epoch = _startingEpoch + i;
+        for (uint256 i = 0; i < _range.length; i++) {
+            uint256 epoch = _range.from + i;
 
             claimAmount += (epochUserParticipation[epoch][msg.sender] * rewardOf(epoch))
                 / epochTotalParticipation[epoch];
@@ -138,7 +137,20 @@ contract DistributorV1 {
         if (claimAmount > 0) {
             require(DISTRIBUTION_TOKEN.transfer(msg.sender, claimAmount), "transfer failed");
         }
-        emit Claimed(msg.sender, _startingEpoch, _numEpochs, claimAmount);
+        emit Claimed(msg.sender, _range.from, _range.length, claimAmount);
+    }
+
+    /**
+     * @notice Allows a user to claim their rewards for participation in multiple claim ranges.
+     * @dev Internally calls claim() for each range and returns the total claimed amount.
+     * @param ranges Array of ClaimRange structs containing startingEpoch and numEpochs.
+     * @return totalClaimed Total amount claimed across all ranges.
+     */
+    function claimMany(Range[] calldata ranges) external returns (uint256 totalClaimed) {
+        for (uint256 i = 0; i < ranges.length; i++) {
+            totalClaimed += claim(ranges[i]);
+        }
+        return totalClaimed;
     }
 
     /**
@@ -163,4 +175,9 @@ contract DistributorV1 {
 
         return result;
     }
+}
+
+struct Range {
+    uint256 from;
+    uint256 length;
 }
