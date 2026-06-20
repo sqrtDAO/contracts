@@ -88,6 +88,47 @@ contract DistributorV1 {
     }
 
     /**
+     * @notice this function finds non zero rewards epochs for specific user
+     * @dev used to show what is claimable to the user
+     * @param _fromEpoch starts search from this epoch
+     * @param _numEpochs keeps searching for this number of epochs (not infinite because of gas limits)
+     * @param _user search for this address participation
+     * @param _maxFound this function will stop searching when it found _maxFound number of epochs
+     * @return nextEpochToSearch is curser of search (send it as _fromEpoch in next call), epochs is array of founded epochs
+     */
+    function discoverRewards(uint256 _fromEpoch, uint256 _numEpochs, address _user, uint256 _maxFound)
+        external
+        view
+        returns (uint256 nextEpochToSearch, uint256[] memory epochs)
+    {
+        // Initialize epochs array with maxFound capacity
+        epochs = new uint256[](_maxFound);
+        uint256 foundCount = 0;
+
+        uint256 maxEpoch = _fromEpoch + _numEpochs;
+        uint256 i = _fromEpoch;
+        while (i < maxEpoch) {
+            // Check if user has claimable reward
+            if (epochUserParticipation[i][_user] > 0) {
+                epochs[foundCount] = i;
+                foundCount++;
+                if (foundCount >= _maxFound) {
+                    i++;
+                    break;
+                }
+            }
+            i++;
+        }
+
+        // Resize the array to actual found count
+        assembly {
+            mstore(epochs, foundCount)
+        }
+
+        nextEpochToSearch = i;
+    }
+
+    /**
      * @notice Allows a user to participate in the reward program by locking tokens for multiple epochs.
      * @dev This function updates the user's participation in the specified number of epochs and transfers the required amount of PARTICIPATION_TOKEN tokens to the contract.
      * @param _amountPerEpoch The amount of tokens to lock per epoch.
