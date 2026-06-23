@@ -19,7 +19,7 @@ contract DistributorV1 {
     uint256 public immutable PROTOCOL_FEE_INV;
     address public immutable PROTOCOL_FEE_RECEIVER;
     uint256 public immutable MIN_PARTICIPATION;
-    uint256 public immutable CLAIM_DELAY_EPOCHS;
+    uint256 public immutable CLAIM_DELAY_SECONDS;
 
     EmissionFunction public emissionFunction;
     Hook public drainHook;
@@ -41,7 +41,7 @@ contract DistributorV1 {
      * @param _protocolFeeInv drainAmount/_protocolFeeInv = protocol fee amount e.g. 200 means 0.5%
      * @param _protocolFeeReceiver address that receives protocol fee
      * @param _minParticipation minimum amount per-epoch a participant must provide
-     * @param _claimDelayEpochs number of epochs a user must wait after an epoch ends before claiming
+     * @param _claimDelaySeconds number of seconds a user must wait after an epoch ends before claiming
      * @param _drainHook contract calls this hook after epoch ends (on first claim)
      * @param _emissionFunction calculates reward of an epoch can be a curve or linear function
      */
@@ -53,7 +53,7 @@ contract DistributorV1 {
         uint256 _protocolFeeInv,
         address _protocolFeeReceiver,
         uint256 _minParticipation,
-        uint256 _claimDelayEpochs,
+        uint256 _claimDelaySeconds,
         Hook memory _drainHook,
         EmissionFunction memory _emissionFunction
     ) {
@@ -64,7 +64,7 @@ contract DistributorV1 {
         PROTOCOL_FEE_INV = _protocolFeeInv;
         PROTOCOL_FEE_RECEIVER = _protocolFeeReceiver;
         MIN_PARTICIPATION = _minParticipation;
-        CLAIM_DELAY_EPOCHS = _claimDelayEpochs;
+        CLAIM_DELAY_SECONDS = _claimDelaySeconds;
         drainHook = _drainHook;
         emissionFunction = _emissionFunction;
     }
@@ -112,7 +112,7 @@ contract DistributorV1 {
             epochDuration: EPOCH_DURATION,
             startingTimestamp: STARTING_TIMESTAMP,
             minParticipation: MIN_PARTICIPATION,
-            claimDelayEpochs: CLAIM_DELAY_EPOCHS,
+            claimDelaySeconds: CLAIM_DELAY_SECONDS,
             remainingRewards: DISTRIBUTION_TOKEN.balanceOf(address(this)),
             epochs: epochs
         });
@@ -190,7 +190,10 @@ contract DistributorV1 {
      */
     function claim(Range calldata _range) public returns (uint256 claimAmount) {
         uint256 currEpoch = currentEpoch();
-        require(_range.from + _range.length + CLAIM_DELAY_EPOCHS - 1 < currEpoch, "Too soon to claim");
+
+        uint256 lastEpochEndTime = STARTING_TIMESTAMP + ((_range.from + _range.length) * EPOCH_DURATION);
+
+        require(block.timestamp >= lastEpochEndTime + CLAIM_DELAY_SECONDS, "Too soon to claim");
 
         if (nextDrainHookToCall < currEpoch) {
             callDrainHook();
@@ -263,7 +266,7 @@ struct GetInfoResult {
     // currentEpoch can be calculated => (NOW - STARTING_TIMESTAMP) / EPOCH_DURATION
 
     uint256 minParticipation;
-    uint256 claimDelayEpochs;
+    uint256 claimDelaySeconds;
 
     uint256 remainingRewards;
 
