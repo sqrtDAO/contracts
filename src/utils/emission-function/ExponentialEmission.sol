@@ -11,47 +11,51 @@ contract ExponentialEmission is IEmissionFunction {
     function calculate(bytes calldata _curveConfig, uint256 _epochNumber) external pure returns (uint256 reward) {
         ExponentialEmissionConfig memory config = abi.decode(_curveConfig, (ExponentialEmissionConfig));
 
-        // Handle edge cases
-        if (_epochNumber == 0) {
-            return config.initialAmount;
-        }
+        if (_epochNumber == 0) return config.initialAmount;
+        if (config.numerator == 0) return 0;
+        if (config.numerator == config.denominator) return config.initialAmount;
 
-        if (config.numerator == 0) {
-            return 0;
-        }
-
-        if (config.numerator >= config.denominator) {
-            // If numerator >= denominator, the reward would increase or stay same
-            // But still need to handle potential overflow
-            if (config.numerator == config.denominator) {
-                return config.initialAmount;
-            }
-        }
-
-        // Start with initialAmount
         reward = config.initialAmount;
+        uint256 num = config.numerator;
+        uint256 den = config.denominator;
+        uint256 exp = _epochNumber;
 
-        // We need to compute (numerator/denominator)^epoch
-        // Using exponentiation by squaring: keep track of the current base (num/denom)^(2^k)
-        uint256 baseNumerator = config.numerator;
-        uint256 baseDenominator = config.denominator;
-        uint256 exponent = _epochNumber;
+        // For exponential decay (numerator < denominator)
+        if (num < den) {
+            while (exp > 0 && reward > 0) {
+                if (exp & 1 == 1) {
+                    reward = (reward * num) / den;
+                }
 
-        while (exponent > 0) {
-            // If current bit is 1, multiply reward by current base (baseNumerator/baseDenominator)
-            if (exponent & 1 == 1) {
-                reward = (reward * baseNumerator) / baseDenominator;
+                exp >>= 1;
+                if (exp > 0) {
+                    // Scale before squaring to prevent overflow
+                    uint256 scale = 1e18;
+                    // Convert to scaled representation: num/den becomes num*scale/den
+                    uint256 scaledNum = (num * scale) / den;
+                    uint256 scaledDen = scale;
+
+                    // Now square in the scaled space
+                    num = (scaledNum * scaledNum) / scale;
+                    den = (scaledDen * scaledDen) / scale;
+                }
             }
+        } else {
+            // For growth (numerator > denominator)
+            while (exp > 0) {
+                if (exp & 1 == 1) {
+                    reward = (reward * num) / den;
+                }
 
-            // Square the base for the next bit: (num/denom)^(2^(k+1))
-            // This means: newNum = oldNum^2, newDen = oldDen^2
-            exponent >>= 1;
-            if (exponent > 0) {
-                baseNumerator *= baseNumerator;
-                baseDenominator *= baseDenominator;
-                while (baseNumerator > (1 << 20)) {
-                    baseNumerator >>= 1;
-                    baseDenominator >>= 1;
+                exp >>= 1;
+                if (exp > 0) {
+                    // Scale before squaring
+                    uint256 scale = 1e18;
+                    uint256 scaledNum = (num * scale) / den;
+                    uint256 scaledDen = scale;
+
+                    num = (scaledNum * scaledNum) / scale;
+                    den = (scaledDen * scaledDen) / scale;
                 }
             }
         }
