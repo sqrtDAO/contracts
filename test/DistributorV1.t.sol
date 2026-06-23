@@ -86,6 +86,25 @@ contract DistributorV1Test is Test {
         distributor.claim(Range({from: 0, length: 1}));
     }
 
+    function testClaimTriggersDrainHookAfterEpoch() public {
+        vm.prank(participant);
+        participationToken.approve(address(distributor), 10 ether);
+
+        vm.prank(participant);
+        distributor.participate(10 ether, 1);
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        assertFalse(drainHook.called());
+
+        vm.prank(participant);
+        uint256 claimed = distributor.claim(Range({from: 0, length: 1}));
+
+        assertEq(claimed, 100 ether);
+        assertTrue(drainHook.called());
+        assertEq(distributor.nextDrainHookToCall(), 1);
+    }
+
     function testGetInfoReturnsClaimDelaySeconds() public {
         GetInfoResult memory info = distributor.getInfo(address(0), Range({from: 0, length: 0}));
 
@@ -94,6 +113,47 @@ contract DistributorV1Test is Test {
         assertEq(info.participationToken, address(participationToken));
         assertEq(info.epochDuration, epochDuration);
         assertEq(info.startingTimestamp, startTimestamp);
+    }
+
+    function testGetInfoWithRangeReturnsParticipationData() public {
+        vm.prank(participant);
+        participationToken.approve(address(distributor), 20 ether);
+
+        vm.prank(participant);
+        distributor.participate(10 ether, 2);
+
+        GetInfoResult memory info = distributor.getInfo(participant, Range({from: 0, length: 2}));
+
+        assertEq(info.epochs.length, 2);
+        assertEq(info.epochs[0].userParticipationAmount, 10 ether);
+        assertEq(info.epochs[0].totalParticipationAmount, 10 ether);
+        assertEq(info.epochs[0].rewardAmount, 100 ether);
+        assertEq(info.epochs[1].userParticipationAmount, 10 ether);
+        assertEq(info.epochs[1].totalParticipationAmount, 10 ether);
+        assertEq(info.epochs[1].rewardAmount, 100 ether);
+    }
+
+    function testDiscoverRewardsReturnsParticipatedEpochs() public {
+        vm.prank(participant);
+        participationToken.approve(address(distributor), 30 ether);
+
+        vm.prank(participant);
+        distributor.participate(10 ether, 3);
+
+        (uint256 nextEpoch, uint256[] memory epochs) = distributor.discoverRewards(0, 5, participant, 5);
+
+        assertEq(nextEpoch, 5);
+        assertEq(epochs.length, 3);
+        assertEq(epochs[0], 0);
+        assertEq(epochs[1], 1);
+        assertEq(epochs[2], 2);
+
+        (nextEpoch, epochs) = distributor.discoverRewards(1, 5, participant, 5);
+
+        assertEq(nextEpoch, 6);
+        assertEq(epochs.length, 2);
+        assertEq(epochs[0], 1);
+        assertEq(epochs[1], 2);
     }
 }
 
