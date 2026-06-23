@@ -7,11 +7,12 @@ import {ExponentialEmission, ExponentialEmissionConfig} from "../src/utils/emiss
 import {LinearEmission, LinearEmissionConfig} from "../src/utils/emission-function/LinearEmission.sol";
 
 /// test result:
-/// [PASS] testExponentialEmissionGas() (gas: 66309)
+/// [PASS] testExponentialEmissionGas() (gas: 50826)
 /// [PASS] testLinearEmissionGas() (gas: 17694)
-/// difference = 66309 - 17694 = 48615
-/// to USD -> 0.0086 USD
-/// so for 10 calculation its 0.08 cents after 1 Million epochs
+/// difference = 66309 - 17694 = 33132
+/// to USD -> 0.0055 USD
+/// so its half a cent after 1 Million epochs
+/// gas price calculated here: https://cryptoneur.xyz/en/gas-fees-calculator
 contract ExponentialEmissionGasTest is Test {
     ExponentialEmission exp;
     LinearEmission linear;
@@ -31,11 +32,11 @@ contract ExponentialEmissionGasTest is Test {
         linearConf = abi.encode(LinearEmissionConfig({base: 50 ether, slope: 1}));
     }
 
-    function testExponentialEmissionGas() public {
+    function testExponentialEmissionGas() public view {
         console.log(exp.calculate(expConf, 1_000_000));
     }
 
-    function testLinearEmissionGas() public {
+    function testLinearEmissionGas() public view {
         console.log(linear.calculate(linearConf, 1_000_000));
     }
 }
