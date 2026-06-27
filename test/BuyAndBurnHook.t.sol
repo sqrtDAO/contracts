@@ -71,11 +71,11 @@ contract MockUniswapRouter {
     {
         require(path.length >= 2, "Invalid swap path");
 
-        IERC20(path[0]).transferFrom(msg.sender, address(this), amountIn);
+        require(IERC20(path[0]).transferFrom(msg.sender, address(this), amountIn), "transfer failed");
 
         uint256 amountOut = IERC20(path[path.length - 1]).balanceOf(address(this));
         if (amountOut > 0) {
-            IERC20(path[path.length - 1]).transfer(to, amountOut);
+            require(IERC20(path[path.length - 1]).transfer(to, amountOut), "transfer failed");
         }
 
         amounts = new uint256[](2);

@@ -33,7 +33,7 @@ contract DistributorV1Test is Test {
         distributionToken.mint(address(this), 1_000 ether);
         participationToken.mint(participant, 1_000 ether);
 
-        distributionToken.transfer(address(this), 0); // no-op to keep balances consistent
+        require(distributionToken.transfer(address(this), 0), "transfer failed"); // no-op to keep balances consistent
 
         distributor = new DistributorV1(
             address(distributionToken),
@@ -50,7 +50,7 @@ contract DistributorV1Test is Test {
             })
         );
 
-        distributionToken.transfer(address(distributor), 1_000 ether);
+        require(distributionToken.transfer(address(distributor), 1_000 ether), "transfer failed");
     }
 
     function testParticipateAndClaimAfterDelay() public {
@@ -105,7 +105,7 @@ contract DistributorV1Test is Test {
         assertEq(distributor.nextDrainHookToCall(), 1);
     }
 
-    function testGetInfoReturnsClaimDelaySeconds() public {
+    function testGetInfoReturnsClaimDelaySeconds() public view {
         GetInfoResult memory info = distributor.getInfo(address(0), Range({from: 0, length: 0}));
 
         assertEq(info.claimDelaySeconds, claimDelaySeconds);
