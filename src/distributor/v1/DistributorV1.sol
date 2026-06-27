@@ -204,9 +204,11 @@ contract DistributorV1 {
         for (uint256 i = 0; i < _range.length; i++) {
             uint256 epoch = _range.from + i;
 
-            claimAmount += (epochUserParticipation[epoch][msg.sender] * rewardOf(epoch))
-                / epochTotalParticipation[epoch];
-            epochUserParticipation[epoch][msg.sender] = 0; // prevents double claim
+            if (epochTotalParticipation[epoch] > 0) {
+                claimAmount += (epochUserParticipation[epoch][msg.sender] * rewardOf(epoch))
+                    / epochTotalParticipation[epoch];
+                epochUserParticipation[epoch][msg.sender] = 0;
+            }
         }
 
         if (claimAmount > 0) {
