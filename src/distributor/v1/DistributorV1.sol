@@ -3,12 +3,13 @@ pragma solidity ^0.8.13;
 
 import {Hook, HookFailure} from "src/utils/Hook.sol";
 import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {EmissionFunction} from "src/utils/emission-function/EmissionFunction.sol";
 
 /// @title Distributor
 /// @notice Base template for distributor contracts that perform token transfers to recipients.
 /// @dev Extend this contract for versioned implementations like `DistributorV1`.
-contract DistributorV1 {
+contract DistributorV1 is ReentrancyGuard {
     event Participated(address indexed participant, uint256 fromEpoch, uint256 numEpochs, uint256 amountPerEpoch);
     event Claimed(address indexed claimant, uint256 fromEpoch, uint256 numEpochs, uint256 totalClaimed);
 
@@ -188,7 +189,7 @@ contract DistributorV1 {
      * Calls drain hook on first claim after each epoch finishes.
      * @param _range from and length.
      */
-    function claim(Range calldata _range) public returns (uint256 claimAmount) {
+    function claim(Range calldata _range) public nonReentrant returns (uint256 claimAmount) {
         uint256 currEpoch = currentEpoch();
 
         uint256 lastEpochEndTime = STARTING_TIMESTAMP + ((_range.from + _range.length) * EPOCH_DURATION);
