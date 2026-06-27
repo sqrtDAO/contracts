@@ -12,6 +12,7 @@ import {EmissionFunction} from "src/utils/emission-function/EmissionFunction.sol
 contract DistributorV1 is ReentrancyGuard {
     event Participated(address indexed participant, uint256 fromEpoch, uint256 numEpochs, uint256 amountPerEpoch);
     event Claimed(address indexed claimant, uint256 fromEpoch, uint256 numEpochs, uint256 totalClaimed);
+    event DrainHookCall(bytes result, uint256 amount, uint256 nextDrainHookToCall);
 
     IERC20 public immutable DISTRIBUTION_TOKEN;
     IERC20 public immutable PARTICIPATION_TOKEN;
@@ -235,21 +236,18 @@ contract DistributorV1 is ReentrancyGuard {
      * @notice this function not necessary called for each epoch it get called when someone call claim and will drain everything that is not already drained!
      */
     function callDrainHook() public returns (bytes memory) {
-        require(
-            PARTICIPATION_TOKEN.transfer(
-                PROTOCOL_FEE_RECEIVER, PARTICIPATION_TOKEN.balanceOf(address(this)) / PROTOCOL_FEE_INV
-            ),
-            "transfer failed"
-        );
+        uint256 balance = PARTICIPATION_TOKEN.balanceOf(address(this));
+        require(PARTICIPATION_TOKEN.transfer(PROTOCOL_FEE_RECEIVER, balance / PROTOCOL_FEE_INV), "transfer failed");
 
         // approve so drainHook contract can control distributor contract tokens
-        PARTICIPATION_TOKEN.approve(drainHook.contractAddress, PARTICIPATION_TOKEN.balanceOf(address(this)));
+        PARTICIPATION_TOKEN.approve(drainHook.contractAddress, balance);
 
         (bool success, bytes memory result) = drainHook.contractAddress.call(drainHook.callData);
 
         if (!success) {
             emit HookFailure(result);
         }
+        emit DrainHookCall(result, balance, nextDrainHookToCall);
 
         return result;
     }
