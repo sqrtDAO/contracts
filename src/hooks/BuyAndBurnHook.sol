@@ -14,45 +14,38 @@ interface IUniswapV2Router02 {
 }
 
 contract BuyAndBurnHook {
-    IUniswapV2Router02 public immutable ROUTER;
-    address public immutable PARTICIPATION_TOKEN;
-    address public immutable DISTRBUTION_TOKEN;
-    address[] public path;
-
-    address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
     event BoughtAndBurned(uint256 amountIn, uint256 amountOut);
 
-    constructor(address _router, address[] memory _path) {
-        require(_path.length >= 2, "Invalid swap path");
-        ROUTER = IUniswapV2Router02(_router);
-        PARTICIPATION_TOKEN = _path[0];
-        DISTRBUTION_TOKEN = _path[_path.length - 1];
-
-        path = new address[](_path.length);
-        for (uint256 i = 0; i < _path.length; i++) {
-            path[i] = _path[i];
-        }
-    }
+    address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
 
     /**
-     * @notice Pulls all participation tokens from the caller, swaps them for distribution tokens on Uniswap, and burns the result.
-     * @dev The caller must have approved this contract to spend PARTICIPATION_TOKEN.
+     * @notice Pulls all sells _sellToken and buys _burnToken then sends all _burnToken to BURN_ADDRESS
+     * @param _sellToken is input token contract take out of sender address
+     * @param _burnToken token that will send to burnAddress after swap
+     * @param _router UniswapV2Router02 address
+     * @param _path uniswap route to swap _sellToken to _burnToken
+     * @dev The caller must have approved this contract to spend _sellToken.
      */
-    function execute() external returns (bytes memory) {
+    function buyAndBurn(address _sellToken, address _burnToken, address _router, address[] calldata _path)
+        external
+        returns (bytes memory)
+    {
         address sender = msg.sender;
-        uint256 amountIn = IERC20(PARTICIPATION_TOKEN).balanceOf(sender);
+        uint256 amountIn = IERC20(_sellToken).balanceOf(sender);
         require(amountIn > 0, "No participation tokens to swap");
 
-        require(IERC20(PARTICIPATION_TOKEN).transferFrom(sender, address(this), amountIn), "transferFrom failed");
+        require(IERC20(_sellToken).transferFrom(sender, address(this), amountIn), "transferFrom failed");
 
-        require(IERC20(PARTICIPATION_TOKEN).approve(address(ROUTER), amountIn), "approve failed");
+        require(IERC20(_sellToken).approve(_router, amountIn), "approve failed");
 
-        uint256[] memory amounts = ROUTER.swapExactTokensForTokens(amountIn, 0, path, address(this), block.timestamp);
+        IUniswapV2Router02 router = IUniswapV2Router02(_router);
 
-        uint256 amountOut = IERC20(DISTRBUTION_TOKEN).balanceOf(address(this));
+        uint256[] memory amounts = router.swapExactTokensForTokens(amountIn, 0, _path, address(this), block.timestamp);
+
+        uint256 amountOut = amounts[amounts.length - 1];
         require(amountOut > 0, "Swap returned zero output");
 
-        require(IERC20(DISTRBUTION_TOKEN).transfer(BURN_ADDRESS, amountOut), "burn transfer failed");
+        require(IERC20(_burnToken).transfer(BURN_ADDRESS, amountOut), "burn transfer failed");
 
         emit BoughtAndBurned(amountIn, amountOut);
         return abi.encode(amounts);

@@ -13,17 +13,18 @@ contract BuyAndBurnHookTest is Test {
     BuyAndBurnHook public hook;
 
     address public participant = address(0x1234);
+    address[] public path = new address[](2);
 
     function setUp() public {
         participationToken = new ERC20Mock();
         distributionToken = new ERC20Mock();
         router = new MockUniswapRouter();
 
-        address[] memory path = new address[](2);
+        path = new address[](2);
         path[0] = address(participationToken);
         path[1] = address(distributionToken);
 
-        hook = new BuyAndBurnHook(address(router), path);
+        hook = new BuyAndBurnHook();
     }
 
     function testExecuteSwapsAndBurnsDistributionToken() public {
@@ -37,7 +38,8 @@ contract BuyAndBurnHookTest is Test {
         participationToken.approve(address(hook), amountIn);
 
         vm.prank(participant);
-        bytes memory result = hook.execute();
+        bytes memory result =
+            hook.buyAndBurn(address(participationToken), address(distributionToken), address(router), path);
 
         uint256[] memory amounts = abi.decode(result, (uint256[]));
         assertEq(amounts.length, 2);
@@ -60,7 +62,7 @@ contract BuyAndBurnHookTest is Test {
 
         vm.prank(participant);
         vm.expectRevert(bytes("Swap returned zero output"));
-        hook.execute();
+        hook.buyAndBurn(address(participationToken), address(distributionToken), address(router), path);
     }
 }
 
