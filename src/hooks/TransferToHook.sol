@@ -10,7 +10,7 @@ contract TransferToHook {
      * @notice transfers all msg.sender allowance to specified address
      * @param _token token that operation
      * @param _to the receiver address
-     * @dev The caller must have approved this contract to spend _sellToken.
+     * @dev The caller must have approved this contract to spend _token.
      */
     function transferTo(address _token, address _to) external {
         address sender = msg.sender;
