@@ -237,7 +237,10 @@ contract DistributorV1 is ReentrancyGuard {
      */
     function callDrainHook() public returns (bytes memory) {
         uint256 balance = PARTICIPATION_TOKEN.balanceOf(address(this));
-        require(PARTICIPATION_TOKEN.transfer(PROTOCOL_FEE_RECEIVER, balance / PROTOCOL_FEE_INV), "transfer failed");
+
+        uint256 fee = balance / PROTOCOL_FEE_INV;
+        require(PARTICIPATION_TOKEN.transfer(PROTOCOL_FEE_RECEIVER, fee), "fee transfer failed");
+        balance = PARTICIPATION_TOKEN.balanceOf(address(this)); // balance -= fee; this sounds dangerous
 
         // approve so drainHook contract can control distributor contract tokens
         PARTICIPATION_TOKEN.approve(drainHook.contractAddress, balance);
@@ -247,6 +250,9 @@ contract DistributorV1 is ReentrancyGuard {
         if (!success) {
             emit HookFailure(result);
         }
+
+        PARTICIPATION_TOKEN.approve(drainHook.contractAddress, 0);
+
         emit DrainHookCall(result, balance, nextDrainHookToCall);
 
         return result;
