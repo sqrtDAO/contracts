@@ -31,12 +31,15 @@ contract BuyAndBurnHook {
         returns (bytes memory)
     {
         address sender = msg.sender;
-        uint256 amountIn = IERC20(_sellToken).balanceOf(sender);
-        require(amountIn > 0, "No participation tokens to swap");
+        IERC20 sellToken = IERC20(_sellToken);
+        IERC20 burnToken = IERC20(_burnToken);
 
-        require(IERC20(_sellToken).transferFrom(sender, address(this), amountIn), "transferFrom failed");
+        uint256 amountIn = sellToken.allowance(sender, address(this)); // might allow only part of all balance so I used allowance and not balance
+        require(amountIn > 0, "Allowance is zero");
 
-        require(IERC20(_sellToken).approve(_router, amountIn), "approve failed");
+        require(sellToken.transferFrom(sender, address(this), amountIn), "transferFrom failed");
+
+        require(sellToken.approve(_router, amountIn), "approve failed");
 
         IUniswapV2Router02 router = IUniswapV2Router02(_router);
 
@@ -45,7 +48,7 @@ contract BuyAndBurnHook {
         uint256 amountOut = amounts[amounts.length - 1];
         require(amountOut > 0, "Swap returned zero output");
 
-        require(IERC20(_burnToken).transfer(BURN_ADDRESS, amountOut), "burn transfer failed");
+        require(burnToken.transfer(BURN_ADDRESS, amountOut), "burn transfer failed");
 
         emit BoughtAndBurned(amountIn, amountOut);
         return abi.encode(amounts);
