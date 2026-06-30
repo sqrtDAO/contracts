@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {DistributorV1} from "./DistributorV1.sol";
+import {DistributorV1, Range} from "./DistributorV1.sol";
 import {Hook} from "src/utils/Hook.sol";
 import {EmissionFunction} from "src/utils/emission-function/EmissionFunction.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
 
 contract FactoryV1 is Ownable {
     event NewDistributor(address indexed distributor);
@@ -23,19 +24,21 @@ contract FactoryV1 is Ownable {
     }
 
     function createDistributor(
-        address _token,
-        address _baseToken,
+        address _distributionToken,
+        address _participationToken,
         uint256 _epochDuration,
         uint256 _startTimestamp,
         uint256 _minParticipation,
         uint256 _claimDelaySeconds,
         bool _allowFutureEpochParticipation,
         Hook memory _drainHook,
-        EmissionFunction memory _emissionFunction
+        EmissionFunction memory _emissionFunction,
+        uint256 _participationAmountPerEpoch,
+        Range calldata _participationRange
     ) external returns (address distributorAddress) {
         DistributorV1 distributor = new DistributorV1(
-            _token,
-            _baseToken,
+            _distributionToken,
+            _participationToken,
             _epochDuration,
             _startTimestamp,
             protocolFeeInv,
@@ -46,6 +49,13 @@ contract FactoryV1 is Ownable {
             _drainHook,
             _emissionFunction
         );
+
+        require(
+            IERC20(_participationToken)
+                .transferFrom(msg.sender, address(this), _participationAmountPerEpoch * _participationRange.length)
+        );
+
+        distributor.participate(_participationAmountPerEpoch, _participationRange, msg.sender); // msg.sender set as recipient so it can claim
 
         distributorAddress = address(distributor);
         emit NewDistributor(distributorAddress);

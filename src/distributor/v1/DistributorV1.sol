@@ -10,7 +10,9 @@ import {EmissionFunction} from "src/utils/emission-function/EmissionFunction.sol
 /// @notice Base template for distributor contracts that perform token transfers to recipients.
 /// @dev Extend this contract for versioned implementations like `DistributorV1`.
 contract DistributorV1 is ReentrancyGuard {
-    event Participated(address indexed participant, uint256 fromEpoch, uint256 numEpochs, uint256 amountPerEpoch);
+    event Participated(
+        address indexed participant, address recipient, uint256 fromEpoch, uint256 numEpochs, uint256 amountPerEpoch
+    );
     event Claimed(address indexed claimant, uint256 fromEpoch, uint256 numEpochs, uint256 totalClaimed);
     event DrainHookCall(bytes result, uint256 amount, uint256 nextDrainHookToCall);
 
@@ -169,8 +171,13 @@ contract DistributorV1 is ReentrancyGuard {
      * @dev This function updates the user's participation in the specified number of epochs and transfers the required amount of PARTICIPATION_TOKEN tokens to the contract.
      * @param _amountPerEpoch The amount of tokens to lock per epoch.
      * @param _range from and length make sure you pass currentEpoch if ALLOW_FUTURE_EPOCH_PARTICIPATION is disabled
+     * @param _recipient address that receive rewards on claim, (msg.sender is paying for participation anyway) (set ZERO to use msg.sender as _recipient)
      */
-    function participate(uint256 _amountPerEpoch, Range calldata _range) external {
+    function participate(uint256 _amountPerEpoch, Range calldata _range, address _recipient) external {
+        if (_recipient == address(0)) {
+            _recipient = msg.sender;
+        }
+
         if (!ALLOW_FUTURE_EPOCH_PARTICIPATION) {
             require(_range.from == currentEpoch());
         }
@@ -185,9 +192,9 @@ contract DistributorV1 is ReentrancyGuard {
 
         for (uint256 i = 0; i < _range.length; i++) {
             epochTotalParticipation[_range.from + i] += _amountPerEpoch;
-            epochUserParticipation[_range.from + i][msg.sender] += _amountPerEpoch;
+            epochUserParticipation[_range.from + i][_recipient] += _amountPerEpoch;
         }
-        emit Participated(msg.sender, _range.from, _range.length, _amountPerEpoch);
+        emit Participated(msg.sender, _recipient, _range.from, _range.length, _amountPerEpoch);
     }
 
     /**
