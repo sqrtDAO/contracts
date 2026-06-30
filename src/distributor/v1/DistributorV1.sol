@@ -22,6 +22,7 @@ contract DistributorV1 is ReentrancyGuard {
     address public immutable PROTOCOL_FEE_RECEIVER;
     uint256 public immutable MIN_PARTICIPATION;
     uint256 public immutable CLAIM_DELAY_SECONDS;
+    bool public immutable ALLOW_FUTURE_EPOCH_PARTICIPATION;
 
     EmissionFunction public emissionFunction;
     Hook public drainHook;
@@ -56,6 +57,7 @@ contract DistributorV1 is ReentrancyGuard {
         address _protocolFeeReceiver,
         uint256 _minParticipation,
         uint256 _claimDelaySeconds,
+        bool _allowFutureEpochParticipation,
         Hook memory _drainHook,
         EmissionFunction memory _emissionFunction
     ) {
@@ -67,6 +69,7 @@ contract DistributorV1 is ReentrancyGuard {
         PROTOCOL_FEE_RECEIVER = _protocolFeeReceiver;
         MIN_PARTICIPATION = _minParticipation;
         CLAIM_DELAY_SECONDS = _claimDelaySeconds;
+        ALLOW_FUTURE_EPOCH_PARTICIPATION = _allowFutureEpochParticipation;
         drainHook = _drainHook;
         emissionFunction = _emissionFunction;
     }
@@ -165,23 +168,26 @@ contract DistributorV1 is ReentrancyGuard {
      * @notice Allows a user to participate in the reward program by locking tokens for multiple epochs.
      * @dev This function updates the user's participation in the specified number of epochs and transfers the required amount of PARTICIPATION_TOKEN tokens to the contract.
      * @param _amountPerEpoch The amount of tokens to lock per epoch.
-     * @param _numEpochs The number of epochs to participate in.
+     * @param _range from and length make sure you pass currentEpoch if ALLOW_FUTURE_EPOCH_PARTICIPATION is disabled
      */
-    function participate(uint256 _amountPerEpoch, uint256 _numEpochs) external {
-        require(_numEpochs != 0, "Invalid epoch number.");
+    function participate(uint256 _amountPerEpoch, Range calldata _range) external {
+        if (!ALLOW_FUTURE_EPOCH_PARTICIPATION) {
+            require(_range.from == currentEpoch());
+        }
+
+        require(_range.length != 0, "Invalid epoch number.");
         require(_amountPerEpoch >= MIN_PARTICIPATION, "Amount below minimum");
-        uint256 currEpoch = currentEpoch();
-        require(rewardOf(currEpoch) < DISTRIBUTION_TOKEN.balanceOf(address(this)), "No more token to distribute");
+        require(rewardOf(_range.from) < DISTRIBUTION_TOKEN.balanceOf(address(this)), "No more token to distribute");
         require(
-            PARTICIPATION_TOKEN.transferFrom(msg.sender, address(this), _numEpochs * _amountPerEpoch),
+            PARTICIPATION_TOKEN.transferFrom(msg.sender, address(this), _range.length * _amountPerEpoch),
             "transferFrom failed"
         );
 
-        for (uint256 i = 0; i < _numEpochs; i++) {
-            epochTotalParticipation[currEpoch + i] += _amountPerEpoch;
-            epochUserParticipation[currEpoch + i][msg.sender] += _amountPerEpoch;
+        for (uint256 i = 0; i < _range.length; i++) {
+            epochTotalParticipation[_range.from + i] += _amountPerEpoch;
+            epochUserParticipation[_range.from + i][msg.sender] += _amountPerEpoch;
         }
-        emit Participated(msg.sender, currEpoch, _numEpochs, _amountPerEpoch);
+        emit Participated(msg.sender, _range.from, _range.length, _amountPerEpoch);
     }
 
     /**

@@ -17,6 +17,7 @@ contract FactoryV1 {
         address _protocolFeeReceiver,
         uint256 _minParticipation,
         uint256 _claimDelaySeconds,
+        bool _allowFutureEpochParticipation,
         Hook memory _drainHook,
         EmissionFunction memory _emissionFunction
     ) external returns (address distributorAddress) {
@@ -29,6 +30,7 @@ contract FactoryV1 {
             _protocolFeeReceiver,
             _minParticipation,
             _claimDelaySeconds,
+            _allowFutureEpochParticipation,
             _drainHook,
             _emissionFunction
         );
