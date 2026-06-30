@@ -38,13 +38,10 @@ contract BuyAndBurnHookTest is Test {
         participationToken.approve(address(hook), amountIn);
 
         vm.prank(participant);
-        bytes memory result =
+        uint256 amountOutReturned =
             hook.buyAndBurn(address(participationToken), address(distributionToken), address(router), path);
 
-        uint256[] memory amounts = abi.decode(result, (uint256[]));
-        assertEq(amounts.length, 2);
-        assertEq(amounts[0], amountIn);
-        assertEq(amounts[1], amountOut);
+        assertEq(amountOutReturned, amountOut);
 
         assertEq(participationToken.balanceOf(participant), 0);
         assertEq(participationToken.balanceOf(address(hook)), 0);
