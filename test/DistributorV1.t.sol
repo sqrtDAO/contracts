@@ -59,7 +59,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 100 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 2}));
+        distributor.participate(10 ether, Range({from: 0, length: 2}), participant);
 
         assertEq(distributor.epochTotalParticipation(0), 10 ether);
         assertEq(distributor.epochUserParticipation(0, participant), 10 ether);
@@ -80,7 +80,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 10 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 1}));
+        distributor.participate(10 ether, Range({from: 0, length: 1}), participant);
 
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds - 1);
         vm.expectRevert(bytes("Too soon to claim"));
@@ -92,7 +92,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 10 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 1}));
+        distributor.participate(10 ether, Range({from: 0, length: 1}), participant);
 
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
@@ -121,7 +121,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 20 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 2}));
+        distributor.participate(10 ether, Range({from: 0, length: 2}), participant);
 
         GetInfoResult memory info = distributor.getInfo(participant, Range({from: 0, length: 2}));
 
@@ -139,7 +139,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 30 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 3}));
+        distributor.participate(10 ether, Range({from: 0, length: 3}), participant);
 
         (uint256 nextEpoch, uint256[] memory epochs) = distributor.discoverRewards(0, 5, participant, 5);
 
