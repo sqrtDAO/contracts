@@ -390,6 +390,287 @@ contract DistributorV1Test is Test {
         assertEq(allowlisted.epochUserParticipation(0, participant), 10 ether);
     }
 
+    // --- claimFor / setClaimFeeBps tests ---
+
+    function testSetClaimFeeBps() public {
+        address user = participant;
+        assertEq(distributor.claimFeeBps(user), 0);
+
+        vm.expectEmit(true, true, true, true);
+        emit DistributorV1.ClaimFeeBpsSet(user, 200);
+        vm.prank(user);
+        distributor.setClaimFeeBps(200);
+
+        assertEq(distributor.claimFeeBps(user), 200);
+    }
+
+    function testSetClaimFeeBpsRevertsAboveMax() public {
+        vm.prank(participant);
+        vm.expectRevert(bytes("max 10000 bps"));
+        distributor.setClaimFeeBps(10001);
+    }
+
+    function testClaimForSelfNoFeeTaken() public {
+        _setupParticipant();
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        vm.prank(participant);
+        distributor.setClaimFeeBps(500); // 5%
+
+        vm.prank(participant);
+        uint256 claimed = distributor.claimFor(participant, Range({from: 0, length: 1}));
+
+        assertEq(claimed, 100 ether);
+        assertEq(distributionToken.balanceOf(participant), 100 ether);
+    }
+
+    function testClaimForThirdPartyGetsFee() public {
+        _setupParticipant();
+
+        address thirdParty = address(0xCAFE);
+
+        vm.prank(participant);
+        distributor.setClaimFeeBps(200); // 2%
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        vm.prank(thirdParty);
+        uint256 claimed = distributor.claimFor(participant, Range({from: 0, length: 1}));
+
+        uint256 expectedFee = (100 ether * 200) / 10000;
+        uint256 expectedUser = 100 ether - expectedFee;
+
+        assertEq(claimed, expectedUser);
+        assertEq(distributionToken.balanceOf(participant), expectedUser);
+        assertEq(distributionToken.balanceOf(thirdParty), expectedFee);
+    }
+
+    function testClaimForWithZeroFee() public {
+        _setupParticipant();
+
+        address thirdParty = address(0xCAFE);
+
+        // fee defaults to 0
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        vm.prank(thirdParty);
+        uint256 claimed = distributor.claimFor(participant, Range({from: 0, length: 1}));
+
+        assertEq(claimed, 100 ether);
+        assertEq(distributionToken.balanceOf(participant), 100 ether);
+        assertEq(distributionToken.balanceOf(thirdParty), 0);
+    }
+
+    function testClaimForMaxFee() public {
+        _setupParticipant();
+
+        address thirdParty = address(0xCAFE);
+
+        vm.prank(participant);
+        distributor.setClaimFeeBps(10000); // 100% — third party gets everything
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        vm.prank(thirdParty);
+        uint256 claimed = distributor.claimFor(participant, Range({from: 0, length: 1}));
+
+        assertEq(claimed, 0);
+        assertEq(distributionToken.balanceOf(participant), 0);
+        assertEq(distributionToken.balanceOf(thirdParty), 100 ether);
+    }
+
+    function testClaimForResetsParticipation() public {
+        _setupParticipant();
+
+        assertEq(distributor.epochUserParticipation(0, participant), 10 ether);
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        vm.prank(address(0xCAFE));
+        distributor.claimFor(participant, Range({from: 0, length: 1}));
+
+        assertEq(distributor.epochUserParticipation(0, participant), 0);
+    }
+
+    function testClaimForRevertsWhenTooSoon() public {
+        _setupParticipant();
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds - 1);
+
+        vm.prank(address(0xCAFE));
+        vm.expectRevert(bytes("Too soon to claim"));
+        distributor.claimFor(participant, Range({from: 0, length: 1}));
+    }
+
+    function testClaimForTriggersDrainHook() public {
+        _setupParticipant();
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        assertFalse(drainHook.called());
+
+        vm.prank(address(0xCAFE));
+        distributor.claimFor(participant, Range({from: 0, length: 1}));
+
+        assertTrue(drainHook.called());
+    }
+
+    function testClaimBehavesSameAsClaimForSelf() public {
+        _setupParticipant();
+
+        address secondUser = address(0x5678);
+        participationToken.mint(secondUser, 1_000 ether);
+
+        vm.startPrank(secondUser);
+        participationToken.approve(address(distributor), 10 ether);
+        distributor.participate(10 ether, Range({from: 0, length: 1}), secondUser, new bytes(0));
+        vm.stopPrank();
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        uint256 expected = (10 ether * 100 ether) / (20 ether);
+
+        vm.prank(participant);
+        uint256 claimedViaClaim = distributor.claim(Range({from: 0, length: 1}));
+
+        vm.prank(secondUser);
+        uint256 claimedViaClaimFor = distributor.claimFor(secondUser, Range({from: 0, length: 1}));
+
+        assertEq(claimedViaClaim, expected);
+        assertEq(claimedViaClaimFor, expected);
+        assertEq(distributionToken.balanceOf(participant), expected);
+        assertEq(distributionToken.balanceOf(secondUser), expected);
+    }
+
+    function testClaimMultipleRangesViaClaimFor() public {
+        _setupParticipant(2);
+
+        vm.warp(startTimestamp + (2 * epochDuration) + claimDelaySeconds);
+
+        vm.prank(address(0xCAFE));
+        uint256 totalClaimed = distributor.claimFor(
+            participant, Range({from: 0, length: 2})
+        );
+
+        assertEq(totalClaimed, 200 ether);
+        assertEq(distributionToken.balanceOf(participant), 200 ether);
+    }
+
+    function testClaimForThirdPartyRespectsIndividualFee() public {
+        address userA = participant;
+        address userB = address(0x5678);
+        address thirdParty = address(0xCAFE);
+
+        participationToken.mint(userB, 1_000 ether);
+
+        vm.startPrank(userA);
+        participationToken.approve(address(distributor), 10 ether);
+        distributor.participate(10 ether, Range({from: 0, length: 1}), userA, new bytes(0));
+        vm.stopPrank();
+
+        vm.startPrank(userB);
+        participationToken.approve(address(distributor), 10 ether);
+        distributor.participate(10 ether, Range({from: 0, length: 1}), userB, new bytes(0));
+        vm.stopPrank();
+
+        vm.prank(userA);
+        distributor.setClaimFeeBps(1000); // 10%
+
+        vm.prank(userB);
+        distributor.setClaimFeeBps(200); // 2%
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        uint256 userAReward = (10 ether * 100 ether) / (20 ether);
+        uint256 userBReward = (10 ether * 100 ether) / (20 ether);
+
+        vm.prank(thirdParty);
+        uint256 claimedA = distributor.claimFor(userA, Range({from: 0, length: 1}));
+
+        vm.prank(thirdParty);
+        uint256 claimedB = distributor.claimFor(userB, Range({from: 0, length: 1}));
+
+        uint256 feeA = (userAReward * 1000) / 10000;
+        uint256 feeB = (userBReward * 200) / 10000;
+
+        assertEq(claimedA, userAReward - feeA);
+        assertEq(claimedB, userBReward - feeB);
+        assertEq(distributionToken.balanceOf(thirdParty), feeA + feeB);
+        assertEq(distributionToken.balanceOf(userA), userAReward - feeA);
+        assertEq(distributionToken.balanceOf(userB), userBReward - feeB);
+    }
+
+    function testClaimForEmitsClaimed() public {
+        _setupParticipant();
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        vm.expectEmit(true, true, true, true);
+        emit DistributorV1.Claimed(participant, 0, 1, 100 ether);
+
+        vm.prank(address(0xCAFE));
+        distributor.claimFor(participant, Range({from: 0, length: 1}));
+    }
+
+    function testClaimForFeeEmitsClaimedWithReducedAmount() public {
+        _setupParticipant();
+
+        vm.prank(participant);
+        distributor.setClaimFeeBps(500); // 5%
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        uint256 expectedUserAmount = 100 ether - (100 ether * 500 / 10000);
+
+        vm.expectEmit(true, true, true, true);
+        emit DistributorV1.Claimed(participant, 0, 1, expectedUserAmount);
+
+        vm.prank(address(0xCAFE));
+        distributor.claimFor(participant, Range({from: 0, length: 1}));
+    }
+
+    function testClaimForIsNotReentrant() public {
+        _setupParticipant();
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        // call claimFor twice — second call should get 0 since participation is zeroed
+        vm.prank(address(0xCAFE));
+        uint256 first = distributor.claimFor(participant, Range({from: 0, length: 1}));
+        assertEq(first, 100 ether);
+
+        vm.prank(address(0xCAFE));
+        uint256 second = distributor.claimFor(participant, Range({from: 0, length: 1}));
+        assertEq(second, 0);
+    }
+
+    function testOriginalClaimStillWorks() public {
+        _setupParticipant();
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        vm.prank(participant);
+        uint256 claimed = distributor.claim(Range({from: 0, length: 1}));
+
+        assertEq(claimed, 100 ether);
+        assertEq(distributionToken.balanceOf(participant), 100 ether);
+    }
+
+    // --- helpers ---
+
+    function _setupParticipant() internal {
+        _setupParticipant(1);
+    }
+
+    function _setupParticipant(uint256 numEpochs) internal {
+        vm.startPrank(participant);
+        participationToken.approve(address(distributor), 10 ether * numEpochs);
+        distributor.participate(10 ether, Range({from: 0, length: numEpochs}), participant, new bytes(0));
+        vm.stopPrank();
+    }
+
     function testAllowlistSignatureChainIdBindsToChain() public {
         uint256 signerPK = 0xABCD;
         address signer = vm.addr(signerPK);
