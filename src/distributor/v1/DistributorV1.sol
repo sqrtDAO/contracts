@@ -5,6 +5,8 @@ import {Hook, HookFailure} from "src/utils/Hook.sol";
 import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {EmissionFunction} from "src/utils/emission-function/EmissionFunction.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /// @title Distributor
 /// @notice Base template for distributor contracts that perform token transfers to recipients.
@@ -25,6 +27,8 @@ contract DistributorV1 is ReentrancyGuard {
     uint256 public immutable MIN_PARTICIPATION;
     uint256 public immutable CLAIM_DELAY_SECONDS;
     bool public immutable ALLOW_FUTURE_EPOCH_PARTICIPATION;
+    address public immutable ALLOWLIST_SIGNER;
+    uint256 public immutable ALLOWLIST_DEADLINE;
 
     EmissionFunction public emissionFunction;
     Hook public drainHook;
@@ -49,6 +53,8 @@ contract DistributorV1 is ReentrancyGuard {
      * @param _claimDelaySeconds number of seconds a user must wait after an epoch ends before claiming
      * @param _drainHook contract calls this hook after epoch ends (on first claim)
      * @param _emissionFunction calculates reward of an epoch can be a curve or linear function
+     * @param _allowlistSigner address that signs participation permits (address(0) = allowlist disabled)
+     * @param _allowlistDeadline timestamp after which anyone can participate without a signature
      */
     constructor(
         address _distributionToken,
@@ -61,7 +67,9 @@ contract DistributorV1 is ReentrancyGuard {
         uint256 _claimDelaySeconds,
         bool _allowFutureEpochParticipation,
         Hook memory _drainHook,
-        EmissionFunction memory _emissionFunction
+        EmissionFunction memory _emissionFunction,
+        address _allowlistSigner,
+        uint256 _allowlistDeadline
     ) {
         DISTRIBUTION_TOKEN = IERC20(_distributionToken);
         PARTICIPATION_TOKEN = IERC20(_participationToken);
@@ -72,6 +80,8 @@ contract DistributorV1 is ReentrancyGuard {
         MIN_PARTICIPATION = _minParticipation;
         CLAIM_DELAY_SECONDS = _claimDelaySeconds;
         ALLOW_FUTURE_EPOCH_PARTICIPATION = _allowFutureEpochParticipation;
+        ALLOWLIST_SIGNER = _allowlistSigner;
+        ALLOWLIST_DEADLINE = _allowlistDeadline;
         drainHook = _drainHook;
         emissionFunction = _emissionFunction;
     }
@@ -168,12 +178,20 @@ contract DistributorV1 is ReentrancyGuard {
 
     /**
      * @notice Allows a user to participate in the reward program by locking tokens for multiple epochs.
-     * @dev This function updates the user's participation in the specified number of epochs and transfers the required amount of PARTICIPATION_TOKEN tokens to the contract.
-     * @param _amountPerEpoch The amount of tokens to lock per epoch.
-     * @param _range from and length make sure you pass currentEpoch if ALLOW_FUTURE_EPOCH_PARTICIPATION is disabled
-     * @param _recipient address that receive rewards on claim, (msg.sender is paying for participation anyway) (set ZERO to use msg.sender as _recipient)
+     * @dev Verifies allowlist signature if allowlist is enabled and deadline has not passed.
+     * @param _allowlistSignature ECDSA signature signed by ALLOWLIST_SIGNER over keccak256(msg.sender, chainId) (pass empty if allowlist is not)
      */
-    function participate(uint256 _amountPerEpoch, Range calldata _range, address _recipient) external {
+    function participate(
+        uint256 _amountPerEpoch,
+        Range calldata _range,
+        address _recipient,
+        bytes calldata _allowlistSignature
+    ) external {
+        _verifyAllowlist(_allowlistSignature);
+        _participate(_amountPerEpoch, _range, _recipient);
+    }
+
+    function _participate(uint256 _amountPerEpoch, Range calldata _range, address _recipient) internal {
         uint256 currEpoch = currentEpoch();
         require(ALLOW_FUTURE_EPOCH_PARTICIPATION || _range.from == currEpoch, "Future epoch participation not allowed");
         require(_range.from >= currEpoch, "Passed epoch participation not allowed");
@@ -195,6 +213,21 @@ contract DistributorV1 is ReentrancyGuard {
             epochUserParticipation[_range.from + i][_recipient] += _amountPerEpoch;
         }
         emit Participated(msg.sender, _recipient, _range.from, _range.length, _amountPerEpoch);
+    }
+
+    /**
+     * @notice Verifies that the caller is allowlisted (via ECDSA signature).
+     * @dev Skips check if allowlist is disabled (signer == address(0)) or deadline has passed.
+     */
+    function _verifyAllowlist(bytes calldata _signature) internal view {
+        if (ALLOWLIST_SIGNER == address(0)) return;
+        if (block.timestamp >= ALLOWLIST_DEADLINE) return;
+        bytes32 message = keccak256(abi.encodePacked(msg.sender, block.chainid));
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
+        (address recovered, ECDSA.RecoverError error,) = ECDSA.tryRecover(digest, _signature);
+        if (error != ECDSA.RecoverError.NoError || recovered != ALLOWLIST_SIGNER) {
+            revert("not allowlisted");
+        }
     }
 
     /**

@@ -74,6 +74,8 @@ contract FactoryV1Test is Test {
             EmissionFunction({
                 emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
             }),
+            address(0),
+            0,
             participationAmount,
             Range({from: 0, length: 1})
         );

@@ -7,6 +7,7 @@ import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Hook} from "src/utils/Hook.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 contract DistributorV1Test is Test {
     DistributorV1 public distributor;
@@ -48,7 +49,9 @@ contract DistributorV1Test is Test {
             Hook({contractAddress: address(drainHook), callData: ""}),
             EmissionFunction({
                 emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
-            })
+            }),
+            address(0),
+            0
         );
 
         require(distributionToken.transfer(address(distributor), 1_000 ether), "transfer failed");
@@ -59,7 +62,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 100 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 2}), participant);
+        distributor.participate(10 ether, Range({from: 0, length: 2}), participant, new bytes(0));
 
         assertEq(distributor.epochTotalParticipation(0), 10 ether);
         assertEq(distributor.epochUserParticipation(0, participant), 10 ether);
@@ -80,7 +83,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 10 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 1}), participant);
+        distributor.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
 
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds - 1);
         vm.expectRevert(bytes("Too soon to claim"));
@@ -92,7 +95,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 10 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 1}), participant);
+        distributor.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
 
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
@@ -121,7 +124,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 20 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 2}), participant);
+        distributor.participate(10 ether, Range({from: 0, length: 2}), participant, new bytes(0));
 
         GetInfoResult memory info = distributor.getInfo(participant, Range({from: 0, length: 2}));
 
@@ -139,7 +142,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 30 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 3}), participant);
+        distributor.participate(10 ether, Range({from: 0, length: 3}), participant, new bytes(0));
 
         (uint256 nextEpoch, uint256[] memory epochs) = distributor.discoverRewards(0, 5, participant, 5);
 
@@ -168,12 +171,12 @@ contract DistributorV1Test is Test {
 
         vm.startPrank(userA);
         participationToken.approve(address(distributor), userAAmount);
-        distributor.participate(userAAmount, Range({from: 0, length: 1}), userA);
+        distributor.participate(userAAmount, Range({from: 0, length: 1}), userA, new bytes(0));
         vm.stopPrank();
 
         vm.startPrank(userB);
         participationToken.approve(address(distributor), userBAmount);
-        distributor.participate(userBAmount, Range({from: 0, length: 1}), userB);
+        distributor.participate(userBAmount, Range({from: 0, length: 1}), userB, new bytes(0));
         vm.stopPrank();
 
         assertEq(distributor.epochTotalParticipation(0), userAAmount + userBAmount);
@@ -207,7 +210,7 @@ contract DistributorV1Test is Test {
 
         vm.prank(participant);
         vm.expectRevert(bytes("Passed epoch participation not allowed"));
-        distributor.participate(10 ether, Range({from: 0, length: 1}), participant);
+        distributor.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
     }
 
     function testFutureEpochParticipationAllowed() public {
@@ -217,7 +220,7 @@ contract DistributorV1Test is Test {
         participationToken.approve(address(distributor), 10 ether);
 
         vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 2, length: 1}), participant);
+        distributor.participate(10 ether, Range({from: 2, length: 1}), participant, new bytes(0));
 
         assertEq(distributor.epochUserParticipation(2, participant), 10 ether);
     }
@@ -236,7 +239,9 @@ contract DistributorV1Test is Test {
             Hook({contractAddress: address(drainHook), callData: ""}),
             EmissionFunction({
                 emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
-            })
+            }),
+            address(0),
+            0
         );
 
         distributionToken.mint(address(noFutureDistributor), 1_000 ether);
@@ -248,11 +253,168 @@ contract DistributorV1Test is Test {
 
         vm.prank(participant);
         vm.expectRevert(bytes("Future epoch participation not allowed"));
-        noFutureDistributor.participate(10 ether, Range({from: 1, length: 1}), participant);
+        noFutureDistributor.participate(10 ether, Range({from: 1, length: 1}), participant, new bytes(0));
 
         vm.prank(participant);
         vm.expectRevert(bytes("Future epoch participation not allowed"));
-        noFutureDistributor.participate(10 ether, Range({from: 2, length: 1}), participant);
+        noFutureDistributor.participate(10 ether, Range({from: 2, length: 1}), participant, new bytes(0));
+    }
+
+    // --- Allowlist tests ---
+
+    function testAllowlistDisabledWorksWithoutSignature() public {
+        assertEq(distributor.ALLOWLIST_SIGNER(), address(0));
+        vm.prank(participant);
+        participationToken.approve(address(distributor), 10 ether);
+        vm.prank(participant);
+        distributor.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
+        assertEq(distributor.epochUserParticipation(0, participant), 10 ether);
+    }
+
+    function testAllowlistRequiresValidSignatureBeforeDeadline() public {
+        uint256 signerPK = 0xABCD;
+        address signer = vm.addr(signerPK);
+        uint256 deadline = block.timestamp + epochDuration;
+
+        DistributorV1 allowlisted = new DistributorV1(
+            address(distributionToken),
+            address(participationToken),
+            epochDuration,
+            startTimestamp,
+            10,
+            protocolFeeReceiver,
+            1 ether,
+            claimDelaySeconds,
+            true,
+            Hook({contractAddress: address(drainHook), callData: ""}),
+            EmissionFunction({
+                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+            }),
+            signer,
+            deadline
+        );
+        distributionToken.mint(address(allowlisted), 1_000 ether);
+
+        bytes memory badSignature = abi.encodePacked(bytes32(0), bytes32(0), uint8(27));
+
+        vm.prank(participant);
+        participationToken.approve(address(allowlisted), 10 ether);
+
+        vm.prank(participant);
+        vm.expectRevert(bytes("not allowlisted"));
+        allowlisted.participate(10 ether, Range({from: 0, length: 1}), participant, badSignature);
+    }
+
+    function testAllowlistAcceptsValidSignature() public {
+        uint256 signerPK = 0xABCD;
+        address signer = vm.addr(signerPK);
+        uint256 deadline = block.timestamp + epochDuration;
+
+        DistributorV1 allowlisted = new DistributorV1(
+            address(distributionToken),
+            address(participationToken),
+            epochDuration,
+            startTimestamp,
+            10,
+            protocolFeeReceiver,
+            1 ether,
+            claimDelaySeconds,
+            true,
+            Hook({contractAddress: address(drainHook), callData: ""}),
+            EmissionFunction({
+                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+            }),
+            signer,
+            deadline
+        );
+        distributionToken.mint(address(allowlisted), 1_000 ether);
+
+        bytes32 message = keccak256(abi.encodePacked(participant, block.chainid));
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPK, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        vm.prank(participant);
+        participationToken.approve(address(allowlisted), 10 ether);
+
+        vm.prank(participant);
+        allowlisted.participate(10 ether, Range({from: 0, length: 1}), participant, signature);
+
+        assertEq(allowlisted.epochUserParticipation(0, participant), 10 ether);
+    }
+
+    function testAllowlistBypassedAfterDeadline() public {
+        uint256 signerPK = 0xABCD;
+        address signer = vm.addr(signerPK);
+
+        uint256 deadline = startTimestamp + epochDuration / 2;
+
+        DistributorV1 allowlisted = new DistributorV1(
+            address(distributionToken),
+            address(participationToken),
+            epochDuration,
+            startTimestamp,
+            10,
+            protocolFeeReceiver,
+            1 ether,
+            claimDelaySeconds,
+            true,
+            Hook({contractAddress: address(drainHook), callData: ""}),
+            EmissionFunction({
+                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+            }),
+            signer,
+            deadline
+        );
+        distributionToken.mint(address(allowlisted), 1_000 ether);
+
+        vm.warp(deadline + 1);
+
+        vm.prank(participant);
+        participationToken.approve(address(allowlisted), 10 ether);
+
+        vm.prank(participant);
+        bytes memory emptySig;
+        allowlisted.participate(10 ether, Range({from: 0, length: 1}), participant, emptySig);
+
+        assertEq(allowlisted.epochUserParticipation(0, participant), 10 ether);
+    }
+
+    function testAllowlistSignatureChainIdBindsToChain() public {
+        uint256 signerPK = 0xABCD;
+        address signer = vm.addr(signerPK);
+        uint256 deadline = block.timestamp + epochDuration;
+
+        DistributorV1 allowlisted = new DistributorV1(
+            address(distributionToken),
+            address(participationToken),
+            epochDuration,
+            startTimestamp,
+            10,
+            protocolFeeReceiver,
+            1 ether,
+            claimDelaySeconds,
+            true,
+            Hook({contractAddress: address(drainHook), callData: ""}),
+            EmissionFunction({
+                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+            }),
+            signer,
+            deadline
+        );
+        distributionToken.mint(address(allowlisted), 1_000 ether);
+
+        bytes32 message = keccak256(abi.encodePacked(participant, block.chainid + 1));
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPK, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        vm.prank(participant);
+        participationToken.approve(address(allowlisted), 10 ether);
+
+        vm.prank(participant);
+        vm.expectRevert(bytes("not allowlisted"));
+        allowlisted.participate(10 ether, Range({from: 0, length: 1}), participant, signature);
     }
 }
 

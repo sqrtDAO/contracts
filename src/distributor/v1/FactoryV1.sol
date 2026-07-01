@@ -33,6 +33,8 @@ contract FactoryV1 is Ownable {
         bool _allowFutureEpochParticipation,
         Hook memory _drainHook,
         EmissionFunction memory _emissionFunction,
+        address _allowlistSigner,
+        uint256 _allowlistDeadline,
         uint256 _participationAmountPerEpoch,
         Range calldata _participationRange
     ) external returns (address distributorAddress) {
@@ -47,7 +49,9 @@ contract FactoryV1 is Ownable {
             _claimDelaySeconds,
             _allowFutureEpochParticipation,
             _drainHook,
-            _emissionFunction
+            _emissionFunction,
+            _allowlistSigner,
+            _allowlistDeadline
         );
 
         require(
@@ -55,7 +59,7 @@ contract FactoryV1 is Ownable {
                 .transferFrom(msg.sender, address(this), _participationAmountPerEpoch * _participationRange.length)
         );
 
-        distributor.participate(_participationAmountPerEpoch, _participationRange, msg.sender); // msg.sender set as recipient so it can claim
+        distributor.participate(_participationAmountPerEpoch, _participationRange, msg.sender, new bytes(0)); // msg.sender set as recipient so it can claim
 
         distributorAddress = address(distributor);
         emit NewDistributor(distributorAddress);
