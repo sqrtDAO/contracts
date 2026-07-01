@@ -156,6 +156,63 @@ contract DistributorV1Test is Test {
         assertEq(epochs[0], 1);
         assertEq(epochs[1], 2);
     }
+
+    function testPassedEpochParticipationNotAllowed() public {
+        vm.warp(startTimestamp + epochDuration);
+        assertEq(distributor.currentEpoch(), 1);
+
+        vm.prank(participant);
+        participationToken.approve(address(distributor), 10 ether);
+
+        vm.prank(participant);
+        vm.expectRevert(bytes("Passed epoch participation not allowed"));
+        distributor.participate(10 ether, Range({from: 0, length: 1}), participant);
+    }
+
+    function testFutureEpochParticipationAllowed() public {
+        assertEq(distributor.currentEpoch(), 0);
+
+        vm.prank(participant);
+        participationToken.approve(address(distributor), 10 ether);
+
+        vm.prank(participant);
+        distributor.participate(10 ether, Range({from: 2, length: 1}), participant);
+
+        assertEq(distributor.epochUserParticipation(2, participant), 10 ether);
+    }
+
+    function testFutureEpochParticipationNotAllowed() public {
+        DistributorV1 noFutureDistributor = new DistributorV1(
+            address(distributionToken),
+            address(participationToken),
+            epochDuration,
+            startTimestamp,
+            10,
+            protocolFeeReceiver,
+            1 ether,
+            claimDelaySeconds,
+            false,
+            Hook({contractAddress: address(drainHook), callData: ""}),
+            EmissionFunction({
+                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+            })
+        );
+
+        distributionToken.mint(address(noFutureDistributor), 1_000 ether);
+
+        assertEq(noFutureDistributor.currentEpoch(), 0);
+
+        vm.prank(participant);
+        participationToken.approve(address(noFutureDistributor), 10 ether);
+
+        vm.prank(participant);
+        vm.expectRevert(bytes("Future epoch participation not allowed"));
+        noFutureDistributor.participate(10 ether, Range({from: 1, length: 1}), participant);
+
+        vm.prank(participant);
+        vm.expectRevert(bytes("Future epoch participation not allowed"));
+        noFutureDistributor.participate(10 ether, Range({from: 2, length: 1}), participant);
+    }
 }
 
 contract DummyHook {
