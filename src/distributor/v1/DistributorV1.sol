@@ -17,6 +17,7 @@ contract DistributorV1 is ReentrancyGuard {
     );
     event Claimed(address indexed claimant, uint256 fromEpoch, uint256 numEpochs, uint256 totalClaimed);
     event DrainHookCall(bytes result, uint256 amount, uint256 nextDrainHookToCall);
+    event ClaimFeeBpsSet(address indexed user, uint256 bps);
 
     IERC20 public immutable DISTRIBUTION_TOKEN;
     IERC20 public immutable PARTICIPATION_TOKEN;
@@ -41,6 +42,8 @@ contract DistributorV1 is ReentrancyGuard {
 
     // tracks which epochs have had their drain hook called
     uint256 public nextDrainHookToCall = 0;
+
+    mapping(address => uint256) public claimFeeBps;
 
     constructor(DistributorConfig memory _config) {
         DISTRIBUTION_TOKEN = IERC20(_config.distributionToken);
@@ -208,7 +211,11 @@ contract DistributorV1 is ReentrancyGuard {
      * Calls drain hook on first claim after each epoch finishes.
      * @param _range from and length.
      */
-    function claim(Range calldata _range) public nonReentrant returns (uint256 claimAmount) {
+    function claim(Range calldata _range) public returns (uint256) {
+        return claimFor(msg.sender, _range);
+    }
+
+    function claimFor(address _user, Range calldata _range) public nonReentrant returns (uint256 claimAmount) {
         uint256 currEpoch = currentEpoch();
 
         uint256 lastEpochEndTime = STARTING_TIMESTAMP + ((_range.from + _range.length) * EPOCH_DURATION);
@@ -225,16 +232,29 @@ contract DistributorV1 is ReentrancyGuard {
             uint256 epoch = _range.from + i;
 
             if (epochTotalParticipation[epoch] > 0) {
-                claimAmount += (epochUserParticipation[epoch][msg.sender] * rewardOf(epoch))
+                claimAmount += (epochUserParticipation[epoch][_user] * rewardOf(epoch))
                     / epochTotalParticipation[epoch];
-                epochUserParticipation[epoch][msg.sender] = 0;
+                epochUserParticipation[epoch][_user] = 0;
             }
         }
 
         if (claimAmount > 0) {
-            require(DISTRIBUTION_TOKEN.transfer(msg.sender, claimAmount), "transfer failed");
+            if (msg.sender != _user) {
+                uint256 fee = (claimAmount * claimFeeBps[_user]) / 10000;
+                if (fee > 0) {
+                    require(DISTRIBUTION_TOKEN.transfer(msg.sender, fee), "fee transfer failed");
+                    claimAmount -= fee;
+                }
+            }
+            require(DISTRIBUTION_TOKEN.transfer(_user, claimAmount), "transfer failed");
         }
-        emit Claimed(msg.sender, _range.from, _range.length, claimAmount);
+        emit Claimed(_user, _range.from, _range.length, claimAmount);
+    }
+
+    function setClaimFeeBps(uint256 _bps) external {
+        require(_bps <= 10000, "max 10000 bps");
+        claimFeeBps[msg.sender] = _bps;
+        emit ClaimFeeBpsSet(msg.sender, _bps);
     }
 
     /**
