@@ -23,7 +23,7 @@ contract SplitterHook {
 
         for (uint256 i = 0; i < _shares.length; i++) {
             Share calldata share = _shares[i];
-            require(token.approve(share.hook.contractAddress, amountIn / share.shareInverse), "approve failed");
+            require(token.approve(share.hook.contractAddress, (amountIn * share.shareBps) / 10000), "approve failed");
 
             (bool success, bytes memory result) = share.hook.contractAddress.call(share.hook.callData);
             if (!success) emit HookFailure(result);
@@ -37,6 +37,6 @@ contract SplitterHook {
 }
 
 struct Share {
-    uint256 shareInverse; // example 200 means 0.5% because 100/200 -> 0.5%
+    uint256 shareBps; // protocol fee in basis points e.g. 50 means 0.5%
     Hook hook;
 }
