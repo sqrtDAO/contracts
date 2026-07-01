@@ -174,21 +174,21 @@ contract DistributorV1 is ReentrancyGuard {
      * @param _recipient address that receive rewards on claim, (msg.sender is paying for participation anyway) (set ZERO to use msg.sender as _recipient)
      */
     function participate(uint256 _amountPerEpoch, Range calldata _range, address _recipient) external {
-        if (_recipient == address(0)) {
-            _recipient = msg.sender;
-        }
-
-        if (!ALLOW_FUTURE_EPOCH_PARTICIPATION) {
-            require(_range.from == currentEpoch());
-        }
-
-        require(_range.length != 0, "Invalid epoch number.");
+        uint256 currEpoch = currentEpoch();
+        require(ALLOW_FUTURE_EPOCH_PARTICIPATION || _range.from == currEpoch, "Future epoch participation not allowed");
+        require(_range.from >= currEpoch, "Passed epoch participation not allowed");
+        require(_range.length != 0, "range length is zero");
         require(_amountPerEpoch >= MIN_PARTICIPATION, "Amount below minimum");
         require(rewardOf(_range.from) < DISTRIBUTION_TOKEN.balanceOf(address(this)), "No more token to distribute");
+
         require(
             PARTICIPATION_TOKEN.transferFrom(msg.sender, address(this), _range.length * _amountPerEpoch),
             "transferFrom failed"
         );
+
+        if (_recipient == address(0)) {
+            _recipient = msg.sender;
+        }
 
         for (uint256 i = 0; i < _range.length; i++) {
             epochTotalParticipation[_range.from + i] += _amountPerEpoch;
