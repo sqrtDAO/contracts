@@ -157,6 +157,47 @@ contract DistributorV1Test is Test {
         assertEq(epochs[1], 2);
     }
 
+    function testMultipleUsersDividendDistribution() public {
+        address userA = participant;
+        address userB = address(0x5678);
+
+        participationToken.mint(userB, 1_000 ether);
+
+        uint256 userAAmount = 10 ether;
+        uint256 userBAmount = 30 ether;
+
+        vm.startPrank(userA);
+        participationToken.approve(address(distributor), userAAmount);
+        distributor.participate(userAAmount, Range({from: 0, length: 1}), userA);
+        vm.stopPrank();
+
+        vm.startPrank(userB);
+        participationToken.approve(address(distributor), userBAmount);
+        distributor.participate(userBAmount, Range({from: 0, length: 1}), userB);
+        vm.stopPrank();
+
+        assertEq(distributor.epochTotalParticipation(0), userAAmount + userBAmount);
+        assertEq(distributor.epochUserParticipation(0, userA), userAAmount);
+        assertEq(distributor.epochUserParticipation(0, userB), userBAmount);
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        uint256 expectedUserA = (userAAmount * 100 ether) / (userAAmount + userBAmount);
+        uint256 expectedUserB = (userBAmount * 100 ether) / (userAAmount + userBAmount);
+
+        vm.prank(userA);
+        uint256 claimedA = distributor.claim(Range({from: 0, length: 1}));
+        assertEq(claimedA, expectedUserA);
+        assertEq(distributionToken.balanceOf(userA), expectedUserA);
+
+        vm.prank(userB);
+        uint256 claimedB = distributor.claim(Range({from: 0, length: 1}));
+        assertEq(claimedB, expectedUserB);
+        assertEq(distributionToken.balanceOf(userB), expectedUserB);
+
+        assertEq(claimedA + claimedB, 100 ether);
+    }
+
     function testPassedEpochParticipationNotAllowed() public {
         vm.warp(startTimestamp + epochDuration);
         assertEq(distributor.currentEpoch(), 1);
