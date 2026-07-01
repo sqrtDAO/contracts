@@ -42,48 +42,20 @@ contract DistributorV1 is ReentrancyGuard {
     // tracks which epochs have had their drain hook called
     uint256 public nextDrainHookToCall = 0;
 
-    /**
-     * @param _distributionToken address of token you want to distribute
-     * @param _participationToken address of token contract receive in epochs when user participate
-     * @param _epochDuration duration of each epoch (in seconds)
-     * @param _startTimestamp time of first epoch starts
-     * @param _protocolFeeInv drainAmount/_protocolFeeInv = protocol fee amount e.g. 200 means 0.5%
-     * @param _protocolFeeReceiver address that receives protocol fee
-     * @param _minParticipation minimum amount per-epoch a participant must provide
-     * @param _claimDelaySeconds number of seconds a user must wait after an epoch ends before claiming
-     * @param _drainHook contract calls this hook after epoch ends (on first claim)
-     * @param _emissionFunction calculates reward of an epoch can be a curve or linear function
-     * @param _allowlistSigner address that signs participation permits (address(0) = allowlist disabled)
-     * @param _allowlistDeadline timestamp after which anyone can participate without a signature
-     */
-    constructor(
-        address _distributionToken,
-        address _participationToken,
-        uint256 _epochDuration,
-        uint256 _startTimestamp,
-        uint256 _protocolFeeInv,
-        address _protocolFeeReceiver,
-        uint256 _minParticipation,
-        uint256 _claimDelaySeconds,
-        bool _allowFutureEpochParticipation,
-        Hook memory _drainHook,
-        EmissionFunction memory _emissionFunction,
-        address _allowlistSigner,
-        uint256 _allowlistDeadline
-    ) {
-        DISTRIBUTION_TOKEN = IERC20(_distributionToken);
-        PARTICIPATION_TOKEN = IERC20(_participationToken);
-        EPOCH_DURATION = _epochDuration;
-        STARTING_TIMESTAMP = _startTimestamp;
-        PROTOCOL_FEE_INV = _protocolFeeInv;
-        PROTOCOL_FEE_RECEIVER = _protocolFeeReceiver;
-        MIN_PARTICIPATION = _minParticipation;
-        CLAIM_DELAY_SECONDS = _claimDelaySeconds;
-        ALLOW_FUTURE_EPOCH_PARTICIPATION = _allowFutureEpochParticipation;
-        ALLOWLIST_SIGNER = _allowlistSigner;
-        ALLOWLIST_DEADLINE = _allowlistDeadline;
-        drainHook = _drainHook;
-        emissionFunction = _emissionFunction;
+    constructor(DistributorConfig memory _config) {
+        DISTRIBUTION_TOKEN = IERC20(_config.distributionToken);
+        PARTICIPATION_TOKEN = IERC20(_config.participationToken);
+        EPOCH_DURATION = _config.epochDuration;
+        STARTING_TIMESTAMP = _config.startTimestamp;
+        PROTOCOL_FEE_INV = _config.protocolFeeInv;
+        PROTOCOL_FEE_RECEIVER = _config.protocolFeeReceiver;
+        MIN_PARTICIPATION = _config.minParticipation;
+        CLAIM_DELAY_SECONDS = _config.claimDelaySeconds;
+        ALLOW_FUTURE_EPOCH_PARTICIPATION = _config.allowFutureEpochParticipation;
+        ALLOWLIST_SIGNER = _config.allowlistSigner;
+        ALLOWLIST_DEADLINE = _config.allowlistDeadline;
+        drainHook = _config.drainHook;
+        emissionFunction = _config.emissionFunction;
     }
 
     /**
@@ -303,6 +275,35 @@ contract DistributorV1 is ReentrancyGuard {
 
         return result;
     }
+}
+
+/// @param distributionToken address of token you want to distribute
+/// @param participationToken address of token contract receive in epochs when user participate
+/// @param epochDuration duration of each epoch (in seconds)
+/// @param startTimestamp time of first epoch starts
+/// @param protocolFeeInv drainAmount / protocolFeeInv = protocol fee amount e.g. 200 means 0.5%
+/// @param protocolFeeReceiver address that receives protocol fee
+/// @param minParticipation minimum amount per-epoch a participant must provide
+/// @param claimDelaySeconds number of seconds a user must wait after an epoch ends before claiming
+/// @param allowFutureEpochParticipation whether users can participate in future epochs
+/// @param drainHook contract called after epoch ends (on first claim)
+/// @param emissionFunction calculates reward of an epoch (e.g. curve or linear function)
+/// @param allowlistSigner address that signs participation permits (address(0) = allowlist disabled)
+/// @param allowlistDeadline timestamp after which anyone can participate without a signature
+struct DistributorConfig {
+    address  distributionToken;
+    address  participationToken;
+    uint256  epochDuration;
+    uint256  startTimestamp;
+    uint256  protocolFeeInv;
+    address  protocolFeeReceiver;
+    uint256  minParticipation;
+    uint256  claimDelaySeconds;
+    bool     allowFutureEpochParticipation;
+    Hook     drainHook;
+    EmissionFunction emissionFunction;
+    address  allowlistSigner;
+    uint256  allowlistDeadline;
 }
 
 struct Range {

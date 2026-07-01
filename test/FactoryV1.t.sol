@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
 import {FactoryV1} from "../src/distributor/v1/FactoryV1.sol";
-import {DistributorV1, Range} from "../src/distributor/v1/DistributorV1.sol";
+import {DistributorV1, DistributorConfig, Range} from "../src/distributor/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Hook} from "src/utils/Hook.sol";
@@ -61,24 +61,26 @@ contract FactoryV1Test is Test {
         vm.prank(user);
         participationToken.approve(address(factory), participationAmount);
 
-        vm.prank(user);
-        return factory.createDistributor(
-            address(distributionToken),
-            address(participationToken),
-            epochDuration,
-            startTimestamp,
-            1 ether,
-            claimDelaySeconds,
-            true,
-            Hook({contractAddress: address(drainHook), callData: ""}),
-            EmissionFunction({
+        DistributorConfig memory config = DistributorConfig({
+            distributionToken: address(distributionToken),
+            participationToken: address(participationToken),
+            epochDuration: epochDuration,
+            startTimestamp: startTimestamp,
+            protocolFeeInv: 0,
+            protocolFeeReceiver: address(0),
+            minParticipation: 1 ether,
+            claimDelaySeconds: claimDelaySeconds,
+            allowFutureEpochParticipation: true,
+            drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
+            emissionFunction: EmissionFunction({
                 emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
             }),
-            address(0),
-            0,
-            participationAmount,
-            Range({from: 0, length: 1})
-        );
+            allowlistSigner: address(0),
+            allowlistDeadline: 0
+        });
+
+        vm.prank(user);
+        return factory.createDistributor(config, participationAmount, Range({from: 0, length: 1}));
     }
 
     function testInitialParticipation() public {

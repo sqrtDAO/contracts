@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
-import {DistributorV1, Range, GetInfoResult} from "../src/distributor/v1/DistributorV1.sol";
+import {DistributorV1, DistributorConfig, Range, GetInfoResult} from "../src/distributor/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Hook} from "src/utils/Hook.sol";
@@ -37,21 +37,23 @@ contract DistributorV1Test is Test {
         require(distributionToken.transfer(address(this), 0), "transfer failed"); // no-op to keep balances consistent
 
         distributor = new DistributorV1(
-            address(distributionToken),
-            address(participationToken),
-            epochDuration,
-            startTimestamp,
-            10,
-            protocolFeeReceiver,
-            1 ether,
-            claimDelaySeconds,
-            true,
-            Hook({contractAddress: address(drainHook), callData: ""}),
-            EmissionFunction({
-                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
-            }),
-            address(0),
-            0
+            DistributorConfig({
+                distributionToken: address(distributionToken),
+                participationToken: address(participationToken),
+                epochDuration: epochDuration,
+                startTimestamp: startTimestamp,
+                protocolFeeInv: 10,
+                protocolFeeReceiver: protocolFeeReceiver,
+                minParticipation: 1 ether,
+                claimDelaySeconds: claimDelaySeconds,
+                allowFutureEpochParticipation: true,
+                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
+                emissionFunction: EmissionFunction({
+                    emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+                }),
+                allowlistSigner: address(0),
+                allowlistDeadline: 0
+            })
         );
 
         require(distributionToken.transfer(address(distributor), 1_000 ether), "transfer failed");
@@ -227,21 +229,23 @@ contract DistributorV1Test is Test {
 
     function testFutureEpochParticipationNotAllowed() public {
         DistributorV1 noFutureDistributor = new DistributorV1(
-            address(distributionToken),
-            address(participationToken),
-            epochDuration,
-            startTimestamp,
-            10,
-            protocolFeeReceiver,
-            1 ether,
-            claimDelaySeconds,
-            false,
-            Hook({contractAddress: address(drainHook), callData: ""}),
-            EmissionFunction({
-                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
-            }),
-            address(0),
-            0
+            DistributorConfig({
+                distributionToken: address(distributionToken),
+                participationToken: address(participationToken),
+                epochDuration: epochDuration,
+                startTimestamp: startTimestamp,
+                protocolFeeInv: 10,
+                protocolFeeReceiver: protocolFeeReceiver,
+                minParticipation: 1 ether,
+                claimDelaySeconds: claimDelaySeconds,
+                allowFutureEpochParticipation: false,
+                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
+                emissionFunction: EmissionFunction({
+                    emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+                }),
+                allowlistSigner: address(0),
+                allowlistDeadline: 0
+            })
         );
 
         distributionToken.mint(address(noFutureDistributor), 1_000 ether);
@@ -277,21 +281,23 @@ contract DistributorV1Test is Test {
         uint256 deadline = block.timestamp + epochDuration;
 
         DistributorV1 allowlisted = new DistributorV1(
-            address(distributionToken),
-            address(participationToken),
-            epochDuration,
-            startTimestamp,
-            10,
-            protocolFeeReceiver,
-            1 ether,
-            claimDelaySeconds,
-            true,
-            Hook({contractAddress: address(drainHook), callData: ""}),
-            EmissionFunction({
-                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
-            }),
-            signer,
-            deadline
+            DistributorConfig({
+                distributionToken: address(distributionToken),
+                participationToken: address(participationToken),
+                epochDuration: epochDuration,
+                startTimestamp: startTimestamp,
+                protocolFeeInv: 10,
+                protocolFeeReceiver: protocolFeeReceiver,
+                minParticipation: 1 ether,
+                claimDelaySeconds: claimDelaySeconds,
+                allowFutureEpochParticipation: true,
+                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
+                emissionFunction: EmissionFunction({
+                    emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+                }),
+                allowlistSigner: signer,
+                allowlistDeadline: deadline
+            })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
 
@@ -311,21 +317,23 @@ contract DistributorV1Test is Test {
         uint256 deadline = block.timestamp + epochDuration;
 
         DistributorV1 allowlisted = new DistributorV1(
-            address(distributionToken),
-            address(participationToken),
-            epochDuration,
-            startTimestamp,
-            10,
-            protocolFeeReceiver,
-            1 ether,
-            claimDelaySeconds,
-            true,
-            Hook({contractAddress: address(drainHook), callData: ""}),
-            EmissionFunction({
-                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
-            }),
-            signer,
-            deadline
+            DistributorConfig({
+                distributionToken: address(distributionToken),
+                participationToken: address(participationToken),
+                epochDuration: epochDuration,
+                startTimestamp: startTimestamp,
+                protocolFeeInv: 10,
+                protocolFeeReceiver: protocolFeeReceiver,
+                minParticipation: 1 ether,
+                claimDelaySeconds: claimDelaySeconds,
+                allowFutureEpochParticipation: true,
+                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
+                emissionFunction: EmissionFunction({
+                    emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+                }),
+                allowlistSigner: signer,
+                allowlistDeadline: deadline
+            })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
 
@@ -350,21 +358,23 @@ contract DistributorV1Test is Test {
         uint256 deadline = startTimestamp + epochDuration / 2;
 
         DistributorV1 allowlisted = new DistributorV1(
-            address(distributionToken),
-            address(participationToken),
-            epochDuration,
-            startTimestamp,
-            10,
-            protocolFeeReceiver,
-            1 ether,
-            claimDelaySeconds,
-            true,
-            Hook({contractAddress: address(drainHook), callData: ""}),
-            EmissionFunction({
-                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
-            }),
-            signer,
-            deadline
+            DistributorConfig({
+                distributionToken: address(distributionToken),
+                participationToken: address(participationToken),
+                epochDuration: epochDuration,
+                startTimestamp: startTimestamp,
+                protocolFeeInv: 10,
+                protocolFeeReceiver: protocolFeeReceiver,
+                minParticipation: 1 ether,
+                claimDelaySeconds: claimDelaySeconds,
+                allowFutureEpochParticipation: true,
+                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
+                emissionFunction: EmissionFunction({
+                    emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+                }),
+                allowlistSigner: signer,
+                allowlistDeadline: deadline
+            })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
 
@@ -386,21 +396,23 @@ contract DistributorV1Test is Test {
         uint256 deadline = block.timestamp + epochDuration;
 
         DistributorV1 allowlisted = new DistributorV1(
-            address(distributionToken),
-            address(participationToken),
-            epochDuration,
-            startTimestamp,
-            10,
-            protocolFeeReceiver,
-            1 ether,
-            claimDelaySeconds,
-            true,
-            Hook({contractAddress: address(drainHook), callData: ""}),
-            EmissionFunction({
-                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
-            }),
-            signer,
-            deadline
+            DistributorConfig({
+                distributionToken: address(distributionToken),
+                participationToken: address(participationToken),
+                epochDuration: epochDuration,
+                startTimestamp: startTimestamp,
+                protocolFeeInv: 10,
+                protocolFeeReceiver: protocolFeeReceiver,
+                minParticipation: 1 ether,
+                claimDelaySeconds: claimDelaySeconds,
+                allowFutureEpochParticipation: true,
+                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
+                emissionFunction: EmissionFunction({
+                    emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+                }),
+                allowlistSigner: signer,
+                allowlistDeadline: deadline
+            })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
 
