@@ -23,7 +23,7 @@ contract DistributorV1 is ReentrancyGuard {
     IERC20 public immutable PARTICIPATION_TOKEN;
     uint256 public immutable EPOCH_DURATION;
     uint256 public immutable STARTING_TIMESTAMP;
-    uint256 public immutable PROTOCOL_FEE_INV;
+    uint256 public immutable PROTOCOL_FEE_BPS;
     address public immutable PROTOCOL_FEE_RECEIVER;
     uint256 public immutable MIN_PARTICIPATION;
     uint256 public immutable CLAIM_DELAY_SECONDS;
@@ -50,7 +50,7 @@ contract DistributorV1 is ReentrancyGuard {
         PARTICIPATION_TOKEN = IERC20(_config.participationToken);
         EPOCH_DURATION = _config.epochDuration;
         STARTING_TIMESTAMP = _config.startTimestamp;
-        PROTOCOL_FEE_INV = _config.protocolFeeInv;
+        PROTOCOL_FEE_BPS = _config.protocolFeeBps;
         PROTOCOL_FEE_RECEIVER = _config.protocolFeeReceiver;
         MIN_PARTICIPATION = _config.minParticipation;
         CLAIM_DELAY_SECONDS = _config.claimDelaySeconds;
@@ -276,7 +276,7 @@ contract DistributorV1 is ReentrancyGuard {
     function callDrainHook() public returns (bytes memory) {
         uint256 balance = PARTICIPATION_TOKEN.balanceOf(address(this));
 
-        uint256 fee = balance / PROTOCOL_FEE_INV;
+        uint256 fee = (balance * PROTOCOL_FEE_BPS) / 10000;
         require(PARTICIPATION_TOKEN.transfer(PROTOCOL_FEE_RECEIVER, fee), "fee transfer failed");
         balance = PARTICIPATION_TOKEN.balanceOf(address(this)); // balance -= fee; this sounds dangerous
 
@@ -301,7 +301,7 @@ contract DistributorV1 is ReentrancyGuard {
 /// @param participationToken address of token contract receive in epochs when user participate
 /// @param epochDuration duration of each epoch (in seconds)
 /// @param startTimestamp time of first epoch starts
-/// @param protocolFeeInv drainAmount / protocolFeeInv = protocol fee amount e.g. 200 means 0.5%
+/// @param protocolFeeBps protocol fee in basis points e.g. 50 means 0.5%
 /// @param protocolFeeReceiver address that receives protocol fee
 /// @param minParticipation minimum amount per-epoch a participant must provide
 /// @param claimDelaySeconds number of seconds a user must wait after an epoch ends before claiming
@@ -315,7 +315,7 @@ struct DistributorConfig {
     address  participationToken;
     uint256  epochDuration;
     uint256  startTimestamp;
-    uint256  protocolFeeInv;
+    uint256  protocolFeeBps;
     address  protocolFeeReceiver;
     uint256  minParticipation;
     uint256  claimDelaySeconds;

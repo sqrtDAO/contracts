@@ -8,13 +8,13 @@ import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
 contract FactoryV1 is Ownable {
     event NewDistributor(address indexed distributor);
 
-    uint256 protocolFeeInv;
+    uint256 protocolFeeBps;
     address protocolFeeReceiver;
 
     constructor(address _initialOwner) Ownable(_initialOwner) {}
 
-    function setProtocolFeeInv(uint256 _protocolFeeInv) public onlyOwner {
-        protocolFeeInv = _protocolFeeInv;
+    function setProtocolFeeBps(uint256 _protocolFeeBps) public onlyOwner {
+        protocolFeeBps = _protocolFeeBps;
     }
 
     function setProtocolFeeReceiver(address _protocolFeeReceiver) public onlyOwner {
@@ -26,7 +26,7 @@ contract FactoryV1 is Ownable {
         uint256 _participationAmountPerEpoch,
         Range calldata _participationRange
     ) external returns (address distributorAddress) {
-        _config.protocolFeeInv = protocolFeeInv;
+        _config.protocolFeeBps = protocolFeeBps;
         _config.protocolFeeReceiver = protocolFeeReceiver;
 
         DistributorV1 distributor = new DistributorV1(_config);

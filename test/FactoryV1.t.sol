@@ -45,12 +45,12 @@ contract FactoryV1Test is Test {
         participationToken.approve(distributorAddr, type(uint256).max);
     }
 
-    function _createDistributor(uint256 feeInv, address feeReceiver, uint256 participationAmount)
+    function _createDistributor(uint256 feeBps, address feeReceiver, uint256 participationAmount)
         internal
         returns (address)
     {
         vm.prank(owner);
-        factory.setProtocolFeeInv(feeInv);
+        factory.setProtocolFeeBps(feeBps);
         vm.prank(owner);
         factory.setProtocolFeeReceiver(feeReceiver);
 
@@ -66,7 +66,7 @@ contract FactoryV1Test is Test {
             participationToken: address(participationToken),
             epochDuration: epochDuration,
             startTimestamp: startTimestamp,
-            protocolFeeInv: 0,
+            protocolFeeBps: 0,
             protocolFeeReceiver: address(0),
             minParticipation: 1 ether,
             claimDelaySeconds: claimDelaySeconds,
@@ -84,7 +84,7 @@ contract FactoryV1Test is Test {
     }
 
     function testInitialParticipation() public {
-        address distributorAddr = _createDistributor(10, protocolFeeReceiver, 10 ether);
+        address distributorAddr = _createDistributor(1000, protocolFeeReceiver, 10 ether);
         DistributorV1 distributor = DistributorV1(distributorAddr);
 
         assertEq(distributor.epochUserParticipation(0, user), 10 ether);
@@ -95,25 +95,25 @@ contract FactoryV1Test is Test {
         address distributorAddr1 = _createDistributor(20, address(0xAAAA), 10 ether);
         DistributorV1 distributor1 = DistributorV1(distributorAddr1);
 
-        assertEq(distributor1.PROTOCOL_FEE_INV(), 20);
+        assertEq(distributor1.PROTOCOL_FEE_BPS(), 20);
         assertEq(distributor1.PROTOCOL_FEE_RECEIVER(), address(0xAAAA));
 
         // this line updates factory settings
         address distributorAddr2 = _createDistributor(50, address(0xBBBB), 10 ether);
         DistributorV1 distributor2 = DistributorV1(distributorAddr2);
 
-        assertEq(distributor1.PROTOCOL_FEE_INV(), 20);
+        assertEq(distributor1.PROTOCOL_FEE_BPS(), 20);
         assertEq(distributor1.PROTOCOL_FEE_RECEIVER(), address(0xAAAA));
 
-        assertEq(distributor2.PROTOCOL_FEE_INV(), 50);
+        assertEq(distributor2.PROTOCOL_FEE_BPS(), 50);
         assertEq(distributor2.PROTOCOL_FEE_RECEIVER(), address(0xBBBB));
     }
 
     function testProtocolFeeDeductedOnClaim() public {
-        uint256 feeInv = 4;
+        uint256 feeBps = 2500;
         uint256 participationAmount = 10 ether;
 
-        address distributorAddr = _createDistributor(feeInv, protocolFeeReceiver, participationAmount);
+        address distributorAddr = _createDistributor(feeBps, protocolFeeReceiver, participationAmount);
         DistributorV1 distributor = DistributorV1(distributorAddr);
 
         uint256 feeBefore = participationToken.balanceOf(protocolFeeReceiver);
@@ -124,13 +124,13 @@ contract FactoryV1Test is Test {
         distributor.claim(Range({from: 0, length: 1}));
 
         uint256 feeAfter = participationToken.balanceOf(protocolFeeReceiver);
-        assertEq(feeAfter - feeBefore, participationAmount / feeInv);
+        assertEq(feeAfter - feeBefore, (participationAmount * feeBps) / 10000);
     }
 
-    function testRevertNonOwnerUpdatesProtocolFeeInv() public {
+    function testRevertNonOwnerUpdatesProtocolFeeBps() public {
         vm.prank(address(0xDEAD));
         vm.expectRevert();
-        factory.setProtocolFeeInv(99);
+        factory.setProtocolFeeBps(99);
     }
 
     function testRevertNonOwnerUpdatesProtocolFeeReceiver() public {
