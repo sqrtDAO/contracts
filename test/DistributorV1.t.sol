@@ -279,8 +279,8 @@ contract DistributorV1Test is Test {
     }
 
     function testAllowlistRequiresValidSignatureBeforeDeadline() public {
-        uint256 signerPK = 0xABCD;
-        address signer = vm.addr(signerPK);
+        uint256 signerPk = 0xABCD;
+        address signer = vm.addr(signerPk);
         uint256 deadline = block.timestamp + epochDuration;
 
         DistributorV1 allowlisted = new DistributorV1(
@@ -316,8 +316,8 @@ contract DistributorV1Test is Test {
     }
 
     function testAllowlistAcceptsValidSignature() public {
-        uint256 signerPK = 0xABCD;
-        address signer = vm.addr(signerPK);
+        uint256 signerPk = 0xABCD;
+        address signer = vm.addr(signerPk);
         uint256 deadline = block.timestamp + epochDuration;
 
         DistributorV1 allowlisted = new DistributorV1(
@@ -344,7 +344,7 @@ contract DistributorV1Test is Test {
         bytes32 message = keccak256(abi.encode(participant, block.chainid));
 
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPK, digest);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
         vm.prank(participant);
@@ -357,8 +357,8 @@ contract DistributorV1Test is Test {
     }
 
     function testAllowlistBypassedAfterDeadline() public {
-        uint256 signerPK = 0xABCD;
-        address signer = vm.addr(signerPK);
+        uint256 signerPk = 0xABCD;
+        address signer = vm.addr(signerPk);
 
         uint256 deadline = startTimestamp + epochDuration / 2;
 
@@ -808,7 +808,7 @@ contract DistributorV1Test is Test {
         // Skim 5 ether from the contract — epoch total is 10 but actual balance is 5
         uint256 skimAmount = 5 ether;
         vm.prank(address(limited));
-        participationToken.transfer(address(0xDEAD), skimAmount);
+        assertTrue(participationToken.transfer(address(0xDEAD), skimAmount));
 
         assertEq(participationToken.balanceOf(address(limited)), 10 ether - skimAmount);
 
@@ -849,8 +849,8 @@ contract DistributorV1Test is Test {
     }
 
     function testAllowlistSignatureChainIdBindsToChain() public {
-        uint256 signerPK = 0xABCD;
-        address signer = vm.addr(signerPK);
+        uint256 signerPk = 0xABCD;
+        address signer = vm.addr(signerPk);
         uint256 deadline = block.timestamp + epochDuration;
 
         DistributorV1 allowlisted = new DistributorV1(
@@ -877,7 +877,7 @@ contract DistributorV1Test is Test {
 
         bytes32 message = keccak256(abi.encode(participant, block.chainid + 1));
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPK, digest);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
         vm.prank(participant);
@@ -909,7 +909,7 @@ contract PullingHook {
     fallback(bytes calldata) external returns (bytes memory) {
         uint256 allowance = IERC20(token).allowance(msg.sender, address(this));
         if (allowance > 0) {
-            IERC20(token).transferFrom(msg.sender, address(this), allowance);
+            require(IERC20(token).transferFrom(msg.sender, address(this), allowance));
             pulled += allowance;
         }
         return "";
