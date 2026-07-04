@@ -341,8 +341,8 @@ contract DistributorV1Test is Test {
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
+        bytes32 message = keccak256(abi.encode(participant, block.chainid));
 
-        bytes32 message = keccak256(abi.encodePacked(participant, block.chainid));
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPK, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
@@ -875,7 +875,7 @@ contract DistributorV1Test is Test {
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
 
-        bytes32 message = keccak256(abi.encodePacked(participant, block.chainid + 1));
+        bytes32 message = keccak256(abi.encode(participant, block.chainid + 1));
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPK, digest);
         bytes memory signature = abi.encodePacked(r, s, v);

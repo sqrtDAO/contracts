@@ -159,7 +159,7 @@ contract DistributorV1 is ReentrancyGuard {
     /**
      * @notice Allows a user to participate in the reward program by locking tokens for multiple epochs.
      * @dev Verifies allowlist signature if allowlist is enabled and deadline has not passed.
-     * @param _allowlistSignature ECDSA signature signed by ALLOWLIST_SIGNER over keccak256(msg.sender, chainId) (pass empty if allowlist is not)
+     * @param _allowlistSignature ECDSA signature signed by ALLOWLIST_SIGNER over keccak256(abi.encode(msg.sender, chainId)) (pass empty if allowlist is disabled)
      */
     function participate(
         uint256 _amountPerEpoch,
@@ -199,7 +199,7 @@ contract DistributorV1 is ReentrancyGuard {
     function _verifyAllowlist(bytes calldata _signature) internal view {
         if (ALLOWLIST_SIGNER == address(0)) return;
         if (block.timestamp >= ALLOWLIST_DEADLINE) return;
-        bytes32 message = keccak256(abi.encodePacked(msg.sender, block.chainid));
+        bytes32 message = keccak256(abi.encode(msg.sender, block.chainid));
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
         (address recovered, ECDSA.RecoverError error,) = ECDSA.tryRecover(digest, _signature);
         if (error != ECDSA.RecoverError.NoError || recovered != ALLOWLIST_SIGNER) {
