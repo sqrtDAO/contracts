@@ -28,6 +28,7 @@ contract DistributorV1 is ReentrancyGuard {
     uint256 public immutable MIN_PARTICIPATION;
     uint256 public immutable CLAIM_DELAY_SECONDS;
     bool public immutable ALLOW_FUTURE_EPOCH_PARTICIPATION;
+    bool public immutable DRAIN_HOOK_ONLY_PASSED_EPOCHS;
     address public immutable ALLOWLIST_SIGNER;
     uint256 public immutable ALLOWLIST_DEADLINE;
 
@@ -55,6 +56,7 @@ contract DistributorV1 is ReentrancyGuard {
         MIN_PARTICIPATION = _config.minParticipation;
         CLAIM_DELAY_SECONDS = _config.claimDelaySeconds;
         ALLOW_FUTURE_EPOCH_PARTICIPATION = _config.allowFutureEpochParticipation;
+        DRAIN_HOOK_ONLY_PASSED_EPOCHS = _config.drainHookOnlyPassedEpochs;
         ALLOWLIST_SIGNER = _config.allowlistSigner;
         ALLOWLIST_DEADLINE = _config.allowlistDeadline;
         drainHook = _config.drainHook;
@@ -232,8 +234,7 @@ contract DistributorV1 is ReentrancyGuard {
             uint256 epoch = _range.from + i;
 
             if (epochTotalParticipation[epoch] > 0) {
-                claimAmount += (epochUserParticipation[epoch][_user] * rewardOf(epoch))
-                    / epochTotalParticipation[epoch];
+                claimAmount += (epochUserParticipation[epoch][_user] * rewardOf(epoch)) / epochTotalParticipation[epoch];
                 epochUserParticipation[epoch][_user] = 0;
             }
         }
@@ -274,14 +275,31 @@ contract DistributorV1 is ReentrancyGuard {
      * @notice this function not necessary called for each epoch it get called when someone call claim and will drain everything that is not already drained!
      */
     function callDrainHook() public returns (bytes memory) {
-        uint256 balance = PARTICIPATION_TOKEN.balanceOf(address(this));
+        uint256 fund;
 
-        uint256 fee = (balance * PROTOCOL_FEE_BPS) / 10000;
+        if (DRAIN_HOOK_ONLY_PASSED_EPOCHS) {
+            uint256 currEpoch = currentEpoch();
+            for (uint256 i = nextDrainHookToCall; i < currEpoch; i++) {
+                fund += epochTotalParticipation[i];
+            }
+            uint256 balance = PARTICIPATION_TOKEN.balanceOf(address(this));
+            if (fund > balance) fund = balance;
+        } else {
+            fund = PARTICIPATION_TOKEN.balanceOf(address(this));
+        }
+
+        uint256 fee = (fund * PROTOCOL_FEE_BPS) / 10000;
         require(PARTICIPATION_TOKEN.transfer(PROTOCOL_FEE_RECEIVER, fee), "fee transfer failed");
-        balance = PARTICIPATION_TOKEN.balanceOf(address(this)); // balance -= fee; this sounds dangerous
 
-        // approve so drainHook contract can control distributor contract tokens
-        PARTICIPATION_TOKEN.approve(drainHook.contractAddress, balance);
+        if (DRAIN_HOOK_ONLY_PASSED_EPOCHS) {
+            fund -= fee;
+            uint256 balance = PARTICIPATION_TOKEN.balanceOf(address(this));
+            if (fund > balance) fund = balance;
+        } else {
+            fund = PARTICIPATION_TOKEN.balanceOf(address(this));
+        }
+
+        PARTICIPATION_TOKEN.approve(drainHook.contractAddress, fund);
 
         (bool success, bytes memory result) = drainHook.contractAddress.call(drainHook.callData);
 
@@ -291,7 +309,7 @@ contract DistributorV1 is ReentrancyGuard {
 
         PARTICIPATION_TOKEN.approve(drainHook.contractAddress, 0);
 
-        emit DrainHookCall(result, balance, nextDrainHookToCall);
+        emit DrainHookCall(result, fund, nextDrainHookToCall);
 
         return result;
     }
@@ -308,22 +326,24 @@ contract DistributorV1 is ReentrancyGuard {
 /// @param allowFutureEpochParticipation whether users can participate in future epochs
 /// @param drainHook contract called after epoch ends (on first claim)
 /// @param emissionFunction calculates reward of an epoch (e.g. curve or linear function)
+/// @param drainHookOnlyPassedEpochs if true, drain hook only receives participation tokens for passed epochs instead of all balance
 /// @param allowlistSigner address that signs participation permits (address(0) = allowlist disabled)
 /// @param allowlistDeadline timestamp after which anyone can participate without a signature
 struct DistributorConfig {
-    address  distributionToken;
-    address  participationToken;
-    uint256  epochDuration;
-    uint256  startTimestamp;
-    uint256  protocolFeeBps;
-    address  protocolFeeReceiver;
-    uint256  minParticipation;
-    uint256  claimDelaySeconds;
-    bool     allowFutureEpochParticipation;
-    Hook     drainHook;
+    address distributionToken;
+    address participationToken;
+    uint256 epochDuration;
+    uint256 startTimestamp;
+    uint256 protocolFeeBps;
+    address protocolFeeReceiver;
+    uint256 minParticipation;
+    uint256 claimDelaySeconds;
+    bool allowFutureEpochParticipation;
+    bool drainHookOnlyPassedEpochs;
+    Hook drainHook;
     EmissionFunction emissionFunction;
-    address  allowlistSigner;
-    uint256  allowlistDeadline;
+    address allowlistSigner;
+    uint256 allowlistDeadline;
 }
 
 struct Range {
