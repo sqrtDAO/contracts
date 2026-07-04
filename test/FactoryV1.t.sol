@@ -71,6 +71,7 @@ contract FactoryV1Test is Test {
             minParticipation: 1 ether,
             claimDelaySeconds: claimDelaySeconds,
             allowFutureEpochParticipation: true,
+            drainHookOnlyPassedEpochs: false,
             drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
             emissionFunction: EmissionFunction({
                 emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
