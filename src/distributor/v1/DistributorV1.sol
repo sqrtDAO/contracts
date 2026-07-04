@@ -163,7 +163,7 @@ contract DistributorV1 is ReentrancyGuard {
         Range calldata _range,
         address _recipient,
         bytes calldata _allowlistSignature
-    ) external {
+    ) external nonReentrant {
         _verifyAllowlist(_allowlistSignature);
         _participate(_amountPerEpoch, _range, _recipient);
     }
