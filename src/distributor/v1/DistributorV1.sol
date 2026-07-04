@@ -174,7 +174,7 @@ contract DistributorV1 is ReentrancyGuard {
         require(_range.from >= currEpoch, "Passed epoch participation not allowed");
         require(_range.length != 0, "range length is zero");
         require(_amountPerEpoch >= MIN_PARTICIPATION, "Amount below minimum");
-        require(rewardOf(_range.from) < DISTRIBUTION_TOKEN.balanceOf(address(this)), "No more token to distribute");
+        require(rewardOf(_range.from) <= DISTRIBUTION_TOKEN.balanceOf(address(this)), "No more token to distribute");
 
         require(
             PARTICIPATION_TOKEN.transferFrom(msg.sender, address(this), _range.length * _amountPerEpoch),
@@ -224,10 +224,7 @@ contract DistributorV1 is ReentrancyGuard {
 
         require(block.timestamp >= lastEpochEndTime + CLAIM_DELAY_SECONDS, "Too soon to claim");
 
-        if (nextDrainHookToCall < currEpoch) {
-            callDrainHook();
-            nextDrainHookToCall = currEpoch;
-        }
+        if (nextDrainHookToCall < currEpoch) callDrainHook();
 
         claimAmount = 0;
         for (uint256 i = 0; i < _range.length; i++) {
@@ -276,9 +273,9 @@ contract DistributorV1 is ReentrancyGuard {
      */
     function callDrainHook() public returns (bytes memory) {
         uint256 fund;
+        uint256 currEpoch = currentEpoch();
 
         if (DRAIN_HOOK_ONLY_PASSED_EPOCHS) {
-            uint256 currEpoch = currentEpoch();
             for (uint256 i = nextDrainHookToCall; i < currEpoch; i++) {
                 fund += epochTotalParticipation[i];
             }
@@ -308,6 +305,8 @@ contract DistributorV1 is ReentrancyGuard {
         }
 
         PARTICIPATION_TOKEN.approve(drainHook.contractAddress, 0);
+
+        nextDrainHookToCall = currEpoch;
 
         emit DrainHookCall(result, fund, nextDrainHookToCall);
 
