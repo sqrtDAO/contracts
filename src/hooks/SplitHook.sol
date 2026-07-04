@@ -2,9 +2,12 @@
 pragma solidity ^0.8.13;
 
 import {Hook, HookFailure} from "src/utils/Hook.sol";
-import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract SplitterHook {
+    using SafeERC20 for IERC20;
+
     event Split(uint256 amount, bytes[] results);
 
     /**
@@ -17,19 +20,19 @@ contract SplitterHook {
         IERC20 token = IERC20(_token);
 
         uint256 amountIn = IERC20(_token).allowance(msg.sender, address(this));
-        require(IERC20(_token).transferFrom(msg.sender, address(this), amountIn), "transferFrom failed");
+        token.safeTransferFrom(msg.sender, address(this), amountIn);
 
         bytes[] memory results = new bytes[](_shares.length);
 
         for (uint256 i = 0; i < _shares.length; i++) {
             Share calldata share = _shares[i];
-            require(token.approve(share.hook.contractAddress, (amountIn * share.shareBps) / 10000), "approve failed");
+            token.forceApprove(share.hook.contractAddress, (amountIn * share.shareBps) / 10000);
 
             (bool success, bytes memory result) = share.hook.contractAddress.call(share.hook.callData);
             if (!success) emit HookFailure(result);
             results[i] = result;
 
-            token.approve(share.hook.contractAddress, 0);
+            token.forceApprove(share.hook.contractAddress, 0);
         }
 
         emit Split(amountIn, results);

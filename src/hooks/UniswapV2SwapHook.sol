@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IUniswapV2Router02} from "src/external-interfaces/IUniswapV2Router02.sol";
 
 abstract contract UniswapV2SwapHook {
+    using SafeERC20 for IERC20;
+
     function _swap(address _router, address[] calldata _path, address _to)
         internal
         returns (uint256 amountIn, uint256 amountOut)
@@ -15,12 +18,12 @@ abstract contract UniswapV2SwapHook {
         amountIn = token.allowance(sender, address(this));
         require(amountIn > 0, "Allowance is zero");
 
-        require(token.transferFrom(sender, address(this), amountIn), "transferFrom failed");
+        token.safeTransferFrom(sender, address(this), amountIn);
 
-        require(token.approve(_router, amountIn), "approve failed");
+        token.forceApprove(_router, amountIn);
         uint256[] memory amounts =
             IUniswapV2Router02(_router).swapExactTokensForTokens(amountIn, 0, _path, _to, block.timestamp);
-        token.approve(_router, 0);
+        token.forceApprove(_router, 0);
 
         amountOut = amounts[amounts.length - 1];
     }

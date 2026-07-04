@@ -2,7 +2,8 @@
 pragma solidity ^0.8.13;
 
 import {Hook, HookFailure} from "src/utils/Hook.sol";
-import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {EmissionFunction} from "src/utils/emission-function/EmissionFunction.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -12,6 +13,8 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 /// @notice Base template for distributor contracts that perform token transfers to recipients.
 /// @dev Extend this contract for versioned implementations like `DistributorV1`.
 contract DistributorV1 is ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     event Participated(
         address indexed participant, address recipient, uint256 fromEpoch, uint256 numEpochs, uint256 amountPerEpoch
     );
@@ -176,10 +179,7 @@ contract DistributorV1 is ReentrancyGuard {
         require(_amountPerEpoch >= MIN_PARTICIPATION, "Amount below minimum");
         require(rewardOf(_range.from) <= DISTRIBUTION_TOKEN.balanceOf(address(this)), "No more token to distribute");
 
-        require(
-            PARTICIPATION_TOKEN.transferFrom(msg.sender, address(this), _range.length * _amountPerEpoch),
-            "transferFrom failed"
-        );
+        PARTICIPATION_TOKEN.safeTransferFrom(msg.sender, address(this), _range.length * _amountPerEpoch);
 
         if (_recipient == address(0)) {
             _recipient = msg.sender;
@@ -240,11 +240,11 @@ contract DistributorV1 is ReentrancyGuard {
             if (msg.sender != _user) {
                 uint256 fee = (claimAmount * claimFeeBps[_user]) / 10000;
                 if (fee > 0) {
-                    require(DISTRIBUTION_TOKEN.transfer(msg.sender, fee), "fee transfer failed");
+                    DISTRIBUTION_TOKEN.safeTransfer(msg.sender, fee);
                     claimAmount -= fee;
                 }
             }
-            require(DISTRIBUTION_TOKEN.transfer(_user, claimAmount), "transfer failed");
+            DISTRIBUTION_TOKEN.safeTransfer(_user, claimAmount);
         }
         emit Claimed(_user, _range.from, _range.length, claimAmount);
     }
@@ -286,7 +286,7 @@ contract DistributorV1 is ReentrancyGuard {
         }
 
         uint256 fee = (fund * PROTOCOL_FEE_BPS) / 10000;
-        require(PARTICIPATION_TOKEN.transfer(PROTOCOL_FEE_RECEIVER, fee), "fee transfer failed");
+        PARTICIPATION_TOKEN.safeTransfer(PROTOCOL_FEE_RECEIVER, fee);
 
         if (DRAIN_HOOK_ONLY_PASSED_EPOCHS) {
             fund -= fee;
@@ -296,7 +296,7 @@ contract DistributorV1 is ReentrancyGuard {
             fund = PARTICIPATION_TOKEN.balanceOf(address(this));
         }
 
-        PARTICIPATION_TOKEN.approve(drainHook.contractAddress, fund);
+        PARTICIPATION_TOKEN.forceApprove(drainHook.contractAddress, fund);
 
         (bool success, bytes memory result) = drainHook.contractAddress.call(drainHook.callData);
 
@@ -304,7 +304,7 @@ contract DistributorV1 is ReentrancyGuard {
             emit HookFailure(result);
         }
 
-        PARTICIPATION_TOKEN.approve(drainHook.contractAddress, 0);
+        PARTICIPATION_TOKEN.forceApprove(drainHook.contractAddress, 0);
 
         nextDrainHookToCall = currEpoch;
 

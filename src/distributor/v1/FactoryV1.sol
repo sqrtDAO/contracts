@@ -3,9 +3,12 @@ pragma solidity ^0.8.13;
 
 import {DistributorV1, DistributorConfig, Range} from "./DistributorV1.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract FactoryV1 is Ownable {
+    using SafeERC20 for IERC20;
+
     event NewDistributor(address indexed distributor);
 
     uint256 protocolFeeBps;
@@ -31,9 +34,8 @@ contract FactoryV1 is Ownable {
 
         DistributorV1 distributor = new DistributorV1(_config);
 
-        require(
-            IERC20(_config.participationToken)
-                .transferFrom(msg.sender, address(this), _participationAmountPerEpoch * _participationRange.length)
+        IERC20(_config.participationToken).safeTransferFrom(
+            msg.sender, address(this), _participationAmountPerEpoch * _participationRange.length
         );
 
         distributor.participate(_participationAmountPerEpoch, _participationRange, msg.sender, new bytes(0)); // msg.sender set as recipient so it can claim
