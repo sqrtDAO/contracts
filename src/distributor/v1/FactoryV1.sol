@@ -11,10 +11,13 @@ contract FactoryV1 is Ownable {
 
     event NewDistributor(address indexed distributor);
 
-    uint256 protocolFeeBps;
-    address protocolFeeReceiver;
+    uint256 public protocolFeeBps;
+    address public protocolFeeReceiver;
 
-    constructor(address _initialOwner) Ownable(_initialOwner) {}
+    constructor(address _initialOwner, uint256 _protocolFeeBps, address _protocolFeeReceiver) Ownable(_initialOwner) {
+        protocolFeeBps = _protocolFeeBps;
+        protocolFeeReceiver = _protocolFeeReceiver;
+    }
 
     function setProtocolFeeBps(uint256 _protocolFeeBps) public onlyOwner {
         protocolFeeBps = _protocolFeeBps;

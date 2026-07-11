@@ -35,7 +35,7 @@ contract FactoryV1Test is Test {
         distributionToken.mint(address(this), 1_000 ether);
         participationToken.mint(user, 1_000 ether);
 
-        factory = new FactoryV1(owner);
+        factory = new FactoryV1(owner, 0, protocolFeeReceiver);
     }
 
     function _createDistributor(uint256 feeBps, address feeReceiver, uint256 participationAmount)
