@@ -78,7 +78,8 @@ contract FactoryV1Test is Test {
             }),
             allowlistSigner: address(0),
             allowlistDeadline: 0,
-            numberOfEpochs: 100
+            numberOfEpochs: 100,
+            totalDistributionAmount: 100 ether
         });
 
         vm.prank(user);

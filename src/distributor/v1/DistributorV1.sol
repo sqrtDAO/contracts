@@ -35,6 +35,7 @@ contract DistributorV1 is ReentrancyGuard {
     address public immutable ALLOWLIST_SIGNER;
     uint256 public immutable ALLOWLIST_DEADLINE;
     uint256 public immutable NUMBER_OF_EPOCHS;
+    uint256 public immutable TOTAL_DISTRIBUTION_AMOUNT;
 
     EmissionFunction public emissionFunction;
     Hook public drainHook;
@@ -64,6 +65,7 @@ contract DistributorV1 is ReentrancyGuard {
         ALLOWLIST_SIGNER = _config.allowlistSigner;
         ALLOWLIST_DEADLINE = _config.allowlistDeadline;
         NUMBER_OF_EPOCHS = _config.numberOfEpochs;
+        TOTAL_DISTRIBUTION_AMOUNT = _config.totalDistributionAmount;
         drainHook = _config.drainHook;
         emissionFunction = _config.emissionFunction;
     }
@@ -114,6 +116,7 @@ contract DistributorV1 is ReentrancyGuard {
             claimDelaySeconds: CLAIM_DELAY_SECONDS,
             remainingRewards: DISTRIBUTION_TOKEN.balanceOf(address(this)),
             numberOfEpochs: NUMBER_OF_EPOCHS,
+            totalDistributionAmount: TOTAL_DISTRIBUTION_AMOUNT,
             epochs: epochs
         });
     }
@@ -348,6 +351,7 @@ struct DistributorConfig {
     address allowlistSigner;
     uint256 allowlistDeadline;
     uint256 numberOfEpochs;
+    uint256 totalDistributionAmount;
 }
 
 struct Range {
@@ -368,6 +372,7 @@ struct GetInfoResult {
 
     uint256 remainingRewards;
     uint256 numberOfEpochs;
+    uint256 totalDistributionAmount;
 
     EpochInfo[] epochs;
 }

@@ -55,7 +55,8 @@ contract DistributorV1Test is Test {
                 }),
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
-                numberOfEpochs: 100
+                numberOfEpochs: 100,
+                totalDistributionAmount: 100 ether
             })
         );
 
@@ -249,7 +250,8 @@ contract DistributorV1Test is Test {
                 }),
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
-                numberOfEpochs: 100
+                numberOfEpochs: 100,
+                totalDistributionAmount: 100 ether
             })
         );
 
@@ -303,7 +305,8 @@ contract DistributorV1Test is Test {
                 }),
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
-                numberOfEpochs: 100
+                numberOfEpochs: 100,
+                totalDistributionAmount: 100 ether
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -341,7 +344,8 @@ contract DistributorV1Test is Test {
                 }),
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
-                numberOfEpochs: 100
+                numberOfEpochs: 100,
+                totalDistributionAmount: 100 ether
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -384,7 +388,8 @@ contract DistributorV1Test is Test {
                 }),
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
-                numberOfEpochs: 100
+                numberOfEpochs: 100,
+                totalDistributionAmount: 100 ether
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -704,7 +709,8 @@ contract DistributorV1Test is Test {
                 }),
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
-                numberOfEpochs: 100
+                numberOfEpochs: 100,
+                totalDistributionAmount: 100 ether
             })
         );
         distributionToken.mint(address(d), 1_000 ether);
@@ -875,7 +881,8 @@ contract DistributorV1Test is Test {
                 }),
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
-                numberOfEpochs: 100
+                numberOfEpochs: 100,
+                totalDistributionAmount: 100 ether
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
