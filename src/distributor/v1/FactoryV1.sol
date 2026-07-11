@@ -34,8 +34,11 @@ contract FactoryV1 is Ownable {
         IERC20(_config.distributionToken)
             .safeTransferFrom(msg.sender, address(distributor), _config.totalDistributionAmount);
 
-        IERC20(_config.participationToken)
-            .safeTransferFrom(msg.sender, address(this), _participationAmountPerEpoch * _participationRange.length);
+        uint256 initialParticipationAmount = _participationAmountPerEpoch * _participationRange.length;
+
+        IERC20(_config.participationToken).safeTransferFrom(msg.sender, address(this), initialParticipationAmount);
+
+        IERC20(_config.participationToken).approve(address(distributor), initialParticipationAmount);
 
         distributor.participate(_participationAmountPerEpoch, _participationRange, msg.sender, new bytes(0)); // msg.sender set as recipient so it can claim
 

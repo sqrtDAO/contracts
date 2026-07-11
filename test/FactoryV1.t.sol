@@ -38,13 +38,6 @@ contract FactoryV1Test is Test {
         factory = new FactoryV1(owner);
     }
 
-    function _approveAndFund(address distributorAddr) internal {
-        distributionToken.mint(distributorAddr, 1_000 ether);
-
-        vm.prank(address(factory));
-        participationToken.approve(distributorAddr, type(uint256).max);
-    }
-
     function _createDistributor(uint256 feeBps, address feeReceiver, uint256 participationAmount)
         internal
         returns (address)
@@ -53,13 +46,6 @@ contract FactoryV1Test is Test {
         factory.setProtocolFeeBps(feeBps);
         vm.prank(owner);
         factory.setProtocolFeeReceiver(feeReceiver);
-
-        uint256 nonce = vm.getNonce(address(factory));
-        address distributorAddr = vm.computeCreateAddress(address(factory), nonce);
-        _approveAndFund(distributorAddr);
-
-        vm.prank(user);
-        participationToken.approve(address(factory), participationAmount);
 
         DistributorConfig memory config = DistributorConfig({
             distributionToken: address(distributionToken),
