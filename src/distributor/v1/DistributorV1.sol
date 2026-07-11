@@ -36,6 +36,7 @@ contract DistributorV1 is ReentrancyGuard {
     uint256 public immutable ALLOWLIST_DEADLINE;
     uint256 public immutable NUMBER_OF_EPOCHS;
     uint256 public immutable TOTAL_DISTRIBUTION_AMOUNT;
+    address public immutable CREATOR;
 
     EmissionFunction public emissionFunction;
     Hook public drainHook;
@@ -51,7 +52,7 @@ contract DistributorV1 is ReentrancyGuard {
 
     mapping(address => uint256) public claimFeeBps;
 
-    constructor(DistributorConfig memory _config) {
+    constructor(address _creator, DistributorConfig memory _config) {
         DISTRIBUTION_TOKEN = IERC20(_config.distributionToken);
         PARTICIPATION_TOKEN = IERC20(_config.participationToken);
         EPOCH_DURATION = _config.epochDuration;
@@ -66,6 +67,7 @@ contract DistributorV1 is ReentrancyGuard {
         ALLOWLIST_DEADLINE = _config.allowlistDeadline;
         NUMBER_OF_EPOCHS = _config.numberOfEpochs;
         TOTAL_DISTRIBUTION_AMOUNT = _config.totalDistributionAmount;
+        CREATOR = _creator;
         drainHook = _config.drainHook;
         emissionFunction = _config.emissionFunction;
     }
@@ -117,6 +119,7 @@ contract DistributorV1 is ReentrancyGuard {
             remainingRewards: DISTRIBUTION_TOKEN.balanceOf(address(this)),
             numberOfEpochs: NUMBER_OF_EPOCHS,
             totalDistributionAmount: TOTAL_DISTRIBUTION_AMOUNT,
+            creator: CREATOR,
             epochs: epochs
         });
     }
@@ -373,6 +376,7 @@ struct GetInfoResult {
     uint256 remainingRewards;
     uint256 numberOfEpochs;
     uint256 totalDistributionAmount;
+    address creator;
 
     EpochInfo[] epochs;
 }

@@ -38,6 +38,7 @@ contract DistributorV1Test is Test {
         require(distributionToken.transfer(address(this), 0), "transfer failed"); // no-op to keep balances consistent
 
         distributor = new DistributorV1(
+            address(this),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -233,6 +234,7 @@ contract DistributorV1Test is Test {
 
     function testFutureEpochParticipationNotAllowed() public {
         DistributorV1 noFutureDistributor = new DistributorV1(
+            address(this),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -288,6 +290,7 @@ contract DistributorV1Test is Test {
         uint256 deadline = block.timestamp + epochDuration;
 
         DistributorV1 allowlisted = new DistributorV1(
+            address(this),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -327,6 +330,7 @@ contract DistributorV1Test is Test {
         uint256 deadline = block.timestamp + epochDuration;
 
         DistributorV1 allowlisted = new DistributorV1(
+            address(this),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -371,6 +375,7 @@ contract DistributorV1Test is Test {
         uint256 deadline = startTimestamp + epochDuration / 2;
 
         DistributorV1 allowlisted = new DistributorV1(
+            address(this),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -692,6 +697,7 @@ contract DistributorV1Test is Test {
         returns (DistributorV1)
     {
         DistributorV1 d = new DistributorV1(
+            address(this),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -864,6 +870,7 @@ contract DistributorV1Test is Test {
         uint256 deadline = block.timestamp + epochDuration;
 
         DistributorV1 allowlisted = new DistributorV1(
+            address(this),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),

@@ -32,7 +32,7 @@ contract FactoryV1 is Ownable {
         _config.protocolFeeBps = protocolFeeBps;
         _config.protocolFeeReceiver = protocolFeeReceiver;
 
-        DistributorV1 distributor = new DistributorV1(_config);
+        DistributorV1 distributor = new DistributorV1(address(this), _config);
 
         IERC20(_config.distributionToken)
             .safeTransferFrom(msg.sender, address(distributor), _config.totalDistributionAmount);
