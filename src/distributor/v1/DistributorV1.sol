@@ -34,6 +34,7 @@ contract DistributorV1 is ReentrancyGuard {
     bool public immutable DRAIN_HOOK_ONLY_PASSED_EPOCHS;
     address public immutable ALLOWLIST_SIGNER;
     uint256 public immutable ALLOWLIST_DEADLINE;
+    uint256 public immutable NUMBER_OF_EPOCHS;
 
     EmissionFunction public emissionFunction;
     Hook public drainHook;
@@ -62,6 +63,7 @@ contract DistributorV1 is ReentrancyGuard {
         DRAIN_HOOK_ONLY_PASSED_EPOCHS = _config.drainHookOnlyPassedEpochs;
         ALLOWLIST_SIGNER = _config.allowlistSigner;
         ALLOWLIST_DEADLINE = _config.allowlistDeadline;
+        NUMBER_OF_EPOCHS = _config.numberOfEpochs;
         drainHook = _config.drainHook;
         emissionFunction = _config.emissionFunction;
     }
@@ -111,6 +113,7 @@ contract DistributorV1 is ReentrancyGuard {
             minParticipation: MIN_PARTICIPATION,
             claimDelaySeconds: CLAIM_DELAY_SECONDS,
             remainingRewards: DISTRIBUTION_TOKEN.balanceOf(address(this)),
+            numberOfEpochs: NUMBER_OF_EPOCHS,
             epochs: epochs
         });
     }
@@ -173,11 +176,12 @@ contract DistributorV1 is ReentrancyGuard {
 
     function _participate(uint256 _amountPerEpoch, Range calldata _range, address _recipient) internal {
         uint256 currEpoch = currentEpoch();
-        require(ALLOW_FUTURE_EPOCH_PARTICIPATION || _range.from == currEpoch, "Future epoch participation not allowed");
         require(_range.from >= currEpoch, "Passed epoch participation not allowed");
-        require(_range.length != 0, "range length is zero");
+        require(_range.length != 0, "Range length is zero");
+        require(_range.from + _range.length <= NUMBER_OF_EPOCHS, "Out of range");
+        require(ALLOW_FUTURE_EPOCH_PARTICIPATION || _range.from == currEpoch, "Future epoch participation not allowed");
+
         require(_amountPerEpoch >= MIN_PARTICIPATION, "Amount below minimum");
-        require(rewardOf(_range.from) <= DISTRIBUTION_TOKEN.balanceOf(address(this)), "No more token to distribute");
 
         PARTICIPATION_TOKEN.safeTransferFrom(msg.sender, address(this), _range.length * _amountPerEpoch);
 
@@ -343,6 +347,7 @@ struct DistributorConfig {
     EmissionFunction emissionFunction;
     address allowlistSigner;
     uint256 allowlistDeadline;
+    uint256 numberOfEpochs;
 }
 
 struct Range {
@@ -362,6 +367,7 @@ struct GetInfoResult {
     uint256 claimDelaySeconds;
 
     uint256 remainingRewards;
+    uint256 numberOfEpochs;
 
     EpochInfo[] epochs;
 }

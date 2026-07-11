@@ -77,7 +77,8 @@ contract FactoryV1Test is Test {
                 emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
             }),
             allowlistSigner: address(0),
-            allowlistDeadline: 0
+            allowlistDeadline: 0,
+            numberOfEpochs: 100
         });
 
         vm.prank(user);

@@ -34,9 +34,8 @@ contract FactoryV1 is Ownable {
 
         DistributorV1 distributor = new DistributorV1(_config);
 
-        IERC20(_config.participationToken).safeTransferFrom(
-            msg.sender, address(this), _participationAmountPerEpoch * _participationRange.length
-        );
+        IERC20(_config.participationToken)
+            .safeTransferFrom(msg.sender, address(this), _participationAmountPerEpoch * _participationRange.length);
 
         distributor.participate(_participationAmountPerEpoch, _participationRange, msg.sender, new bytes(0)); // msg.sender set as recipient so it can claim
 

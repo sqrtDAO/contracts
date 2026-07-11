@@ -54,7 +54,8 @@ contract DistributorV1Test is Test {
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
                 allowlistSigner: address(0),
-                allowlistDeadline: 0
+                allowlistDeadline: 0,
+                numberOfEpochs: 100
             })
         );
 
@@ -247,7 +248,8 @@ contract DistributorV1Test is Test {
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
                 allowlistSigner: address(0),
-                allowlistDeadline: 0
+                allowlistDeadline: 0,
+                numberOfEpochs: 100
             })
         );
 
@@ -300,7 +302,8 @@ contract DistributorV1Test is Test {
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
                 allowlistSigner: signer,
-                allowlistDeadline: deadline
+                allowlistDeadline: deadline,
+                numberOfEpochs: 100
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -337,7 +340,8 @@ contract DistributorV1Test is Test {
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
                 allowlistSigner: signer,
-                allowlistDeadline: deadline
+                allowlistDeadline: deadline,
+                numberOfEpochs: 100
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -379,7 +383,8 @@ contract DistributorV1Test is Test {
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
                 allowlistSigner: signer,
-                allowlistDeadline: deadline
+                allowlistDeadline: deadline,
+                numberOfEpochs: 100
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -556,9 +561,7 @@ contract DistributorV1Test is Test {
         vm.warp(startTimestamp + (2 * epochDuration) + claimDelaySeconds);
 
         vm.prank(address(0xCAFE));
-        uint256 totalClaimed = distributor.claimFor(
-            participant, Range({from: 0, length: 2})
-        );
+        uint256 totalClaimed = distributor.claimFor(participant, Range({from: 0, length: 2}));
 
         assertEq(totalClaimed, 200 ether);
         assertEq(distributionToken.balanceOf(participant), 200 ether);
@@ -700,7 +703,8 @@ contract DistributorV1Test is Test {
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
                 allowlistSigner: address(0),
-                allowlistDeadline: 0
+                allowlistDeadline: 0,
+                numberOfEpochs: 100
             })
         );
         distributionToken.mint(address(d), 1_000 ether);
@@ -870,7 +874,8 @@ contract DistributorV1Test is Test {
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
                 allowlistSigner: signer,
-                allowlistDeadline: deadline
+                allowlistDeadline: deadline,
+                numberOfEpochs: 100
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
