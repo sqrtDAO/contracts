@@ -66,8 +66,6 @@ contract FactoryV1Test is Test {
             participationToken: address(participationToken),
             epochDuration: epochDuration,
             startTimestamp: startTimestamp,
-            protocolFeeBps: 0,
-            protocolFeeReceiver: address(0),
             minParticipation: 1 ether,
             claimDelaySeconds: claimDelaySeconds,
             allowFutureEpochParticipation: true,

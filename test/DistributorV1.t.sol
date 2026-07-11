@@ -39,13 +39,13 @@ contract DistributorV1Test is Test {
 
         distributor = new DistributorV1(
             address(this),
+            1000,
+            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
                 epochDuration: epochDuration,
                 startTimestamp: startTimestamp,
-                protocolFeeBps: 1000,
-                protocolFeeReceiver: protocolFeeReceiver,
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
@@ -235,13 +235,13 @@ contract DistributorV1Test is Test {
     function testFutureEpochParticipationNotAllowed() public {
         DistributorV1 noFutureDistributor = new DistributorV1(
             address(this),
+            1000,
+            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
                 epochDuration: epochDuration,
                 startTimestamp: startTimestamp,
-                protocolFeeBps: 1000,
-                protocolFeeReceiver: protocolFeeReceiver,
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: false,
@@ -291,13 +291,13 @@ contract DistributorV1Test is Test {
 
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
+            1000,
+            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
                 epochDuration: epochDuration,
                 startTimestamp: startTimestamp,
-                protocolFeeBps: 1000,
-                protocolFeeReceiver: protocolFeeReceiver,
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
@@ -331,13 +331,13 @@ contract DistributorV1Test is Test {
 
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
+            1000,
+            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
                 epochDuration: epochDuration,
                 startTimestamp: startTimestamp,
-                protocolFeeBps: 1000,
-                protocolFeeReceiver: protocolFeeReceiver,
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
@@ -376,13 +376,13 @@ contract DistributorV1Test is Test {
 
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
+            1000,
+            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
                 epochDuration: epochDuration,
                 startTimestamp: startTimestamp,
-                protocolFeeBps: 1000,
-                protocolFeeReceiver: protocolFeeReceiver,
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
@@ -698,13 +698,13 @@ contract DistributorV1Test is Test {
     {
         DistributorV1 d = new DistributorV1(
             address(this),
+            1000,
+            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
                 epochDuration: epochDuration,
                 startTimestamp: startTimestamp,
-                protocolFeeBps: 1000,
-                protocolFeeReceiver: protocolFeeReceiver,
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
@@ -871,13 +871,13 @@ contract DistributorV1Test is Test {
 
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
+            1000,
+            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
                 epochDuration: epochDuration,
                 startTimestamp: startTimestamp,
-                protocolFeeBps: 1000,
-                protocolFeeReceiver: protocolFeeReceiver,
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,

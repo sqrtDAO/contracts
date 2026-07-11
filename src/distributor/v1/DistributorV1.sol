@@ -52,13 +52,18 @@ contract DistributorV1 is ReentrancyGuard {
 
     mapping(address => uint256) public claimFeeBps;
 
-    constructor(address _creator, DistributorConfig memory _config) {
+    constructor(
+        address _creator,
+        uint256 _protocolFeeBps,
+        address _protocolFeeReceiver,
+        DistributorConfig memory _config
+    ) {
         DISTRIBUTION_TOKEN = IERC20(_config.distributionToken);
         PARTICIPATION_TOKEN = IERC20(_config.participationToken);
         EPOCH_DURATION = _config.epochDuration;
         STARTING_TIMESTAMP = _config.startTimestamp;
-        PROTOCOL_FEE_BPS = _config.protocolFeeBps;
-        PROTOCOL_FEE_RECEIVER = _config.protocolFeeReceiver;
+        PROTOCOL_FEE_BPS = _protocolFeeBps;
+        PROTOCOL_FEE_RECEIVER = _protocolFeeReceiver;
         MIN_PARTICIPATION = _config.minParticipation;
         CLAIM_DELAY_SECONDS = _config.claimDelaySeconds;
         ALLOW_FUTURE_EPOCH_PARTICIPATION = _config.allowFutureEpochParticipation;
@@ -343,8 +348,6 @@ struct DistributorConfig {
     address participationToken;
     uint256 epochDuration;
     uint256 startTimestamp;
-    uint256 protocolFeeBps;
-    address protocolFeeReceiver;
     uint256 minParticipation;
     uint256 claimDelaySeconds;
     bool allowFutureEpochParticipation;
