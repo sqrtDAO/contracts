@@ -14,9 +14,18 @@ contract FactoryV1 is Ownable {
     uint256 public protocolFeeBps;
     address public protocolFeeReceiver;
 
+    /// (contract => creator)
+    /// @dev this can be used to check if contract address is a valid contract created by this factory and not somewhere else
+    /// but it saves creator address instead of bool "just in case"
+    mapping(address => address) creatorOf;
+
     constructor(address _initialOwner, uint256 _protocolFeeBps, address _protocolFeeReceiver) Ownable(_initialOwner) {
         protocolFeeBps = _protocolFeeBps;
         protocolFeeReceiver = _protocolFeeReceiver;
+    }
+
+    function checkContractDeployedByThis(address _contractAddress) public view returns (bool) {
+        return creatorOf[_contractAddress] != address(0);
     }
 
     function setProtocolFeeBps(uint256 _protocolFeeBps) public onlyOwner {
@@ -27,6 +36,8 @@ contract FactoryV1 is Ownable {
         protocolFeeReceiver = _protocolFeeReceiver;
     }
 
+    /// @dev Make sure you give allowance to Factory contract before call this
+    /// allowance to both participation token (for initial participation) and distribution token to transfer totalDistributionAmount to distribution contract
     function createDistributor(
         DistributorConfig memory _config,
         uint256 _participationAmountPerEpoch,
@@ -46,6 +57,7 @@ contract FactoryV1 is Ownable {
         distributor.participate(_participationAmountPerEpoch, _participationRange, msg.sender, new bytes(0)); // msg.sender set as recipient so it can claim
 
         distributorAddress = address(distributor);
+        creatorOf[distributorAddress] = msg.sender;
         emit NewDistributor(distributorAddress);
     }
 }
