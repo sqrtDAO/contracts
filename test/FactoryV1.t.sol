@@ -67,6 +67,13 @@ contract FactoryV1Test is Test {
         });
 
         vm.prank(user);
+        participationToken.approve(address(factory), participationAmount);
+
+        distributionToken.mint(user, 1_000 ether);
+        vm.prank(user);
+        distributionToken.approve(address(factory), type(uint256).max);
+
+        vm.prank(user);
         return factory.createDistributor(config, participationAmount, Range({from: 0, length: 1}));
     }
 
