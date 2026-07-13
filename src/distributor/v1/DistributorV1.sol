@@ -251,16 +251,17 @@ contract DistributorV1 is ReentrancyGuard {
             }
         }
 
-        if (claimAmount > 0) {
-            if (msg.sender != _user) {
-                uint256 fee = (claimAmount * claimFeeBps[_user]) / 10000;
-                if (fee > 0) {
-                    DISTRIBUTION_TOKEN.safeTransfer(msg.sender, fee);
-                    claimAmount -= fee;
-                }
-            }
-            DISTRIBUTION_TOKEN.safeTransfer(_user, claimAmount);
+        require(claimAmount > 0, "nothing to claim");
+
+        // third party claim fee
+        if (msg.sender != _user && claimFeeBps[_user] != 0) {
+            uint256 fee = (claimAmount * claimFeeBps[_user]) / 10000;
+            DISTRIBUTION_TOKEN.safeTransfer(msg.sender, fee);
+            claimAmount -= fee;
         }
+
+        DISTRIBUTION_TOKEN.safeTransfer(_user, claimAmount);
+
         emit Claimed(_user, _range.from, _range.length, claimAmount);
     }
 
