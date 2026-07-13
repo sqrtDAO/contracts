@@ -3,8 +3,8 @@ pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {BuyAndBurnHook} from "../src/hooks/BuyAndBurnHook.sol";
-import {BuyBackHook} from "../src/hooks/BuyBackHook.sol";
+import {BuyAndBurnHook} from "../src/utils/hooks/BuyAndBurnHook.sol";
+import {BuyBackHook} from "../src/utils/hooks/BuyBackHook.sol";
 import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
 
 contract BuyAndBurnHookTest is Test {
