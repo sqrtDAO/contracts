@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
-import {DistributorV1, DistributorConfig, Range, GetInfoResult} from "../src/distributor/v1/DistributorV1.sol";
+import {DistributorV1, DistributorConfig, Range, GetInfoResult} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Hook} from "src/utils/Hook.sol";

@@ -5,11 +5,13 @@ import {DistributorV1, DistributorConfig, Range} from "./DistributorV1.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {TokenV1, Allocation} from "./TokenV1.sol";
 
 contract FactoryV1 is Ownable {
     using SafeERC20 for IERC20;
 
     event NewDistributor(address indexed distributor);
+    event NewToken(address indexed tokenAddress);
 
     uint256 public protocolFeeBps;
     address public protocolFeeReceiver;
@@ -59,5 +61,16 @@ contract FactoryV1 is Ownable {
         distributorAddress = address(distributor);
         creatorOf[distributorAddress] = msg.sender;
         emit NewDistributor(distributorAddress);
+    }
+
+    function createToken(string memory _name, string memory _symbol, Allocation[] memory _allocations)
+        external
+        payable
+        returns (address tokenAddress)
+    {
+        // Deploy new token – the total supply goes straight to the creator (msg.sender)
+        TokenV1 newToken = new TokenV1(_name, _symbol, _allocations);
+        tokenAddress = address(newToken);
+        emit NewToken(tokenAddress);
     }
 }

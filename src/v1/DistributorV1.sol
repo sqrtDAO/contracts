@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {Hook, HookFailure} from "src/utils/Hook.sol";
+import {Hook} from "src/utils/Hook.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -231,8 +231,6 @@ contract DistributorV1 is ReentrancyGuard {
     }
 
     function claimFor(address _user, Range calldata _range) public nonReentrant returns (uint256 claimAmount) {
-        uint256 currEpoch = currentEpoch();
-
         uint256 lastEpochEndTime = STARTING_TIMESTAMP + ((_range.from + _range.length) * EPOCH_DURATION);
 
         require(block.timestamp >= lastEpochEndTime + CLAIM_DELAY_SECONDS, "Too soon to claim");

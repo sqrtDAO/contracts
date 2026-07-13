@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {TokenV1, Allocation} from "../src/launchpad/v1/TokenV1.sol";
+import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
 
 contract TokenV1Test is Test {
     TokenV1 token;
