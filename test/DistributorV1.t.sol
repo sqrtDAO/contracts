@@ -49,7 +49,6 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHookOnlyPassedEpochs: false,
                 drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
@@ -95,25 +94,6 @@ contract DistributorV1Test is Test {
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds - 1);
         vm.expectRevert(bytes("Too soon to claim"));
         distributor.claim(Range({from: 0, length: 1}));
-    }
-
-    function testClaimTriggersDrainHookAfterEpoch() public {
-        vm.prank(participant);
-        participationToken.approve(address(distributor), 10 ether);
-
-        vm.prank(participant);
-        distributor.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
-
-        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
-
-        assertFalse(drainHook.called());
-
-        vm.prank(participant);
-        uint256 claimed = distributor.claim(Range({from: 0, length: 1}));
-
-        assertEq(claimed, 100 ether);
-        assertTrue(drainHook.called());
-        assertEq(distributor.nextDrainHookToCall(), 1);
     }
 
     function testGetInfoReturnsClaimDelaySeconds() public view {
@@ -245,7 +225,6 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: false,
-                drainHookOnlyPassedEpochs: false,
                 drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
@@ -301,7 +280,6 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHookOnlyPassedEpochs: false,
                 drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
@@ -341,7 +319,6 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHookOnlyPassedEpochs: false,
                 drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
@@ -386,7 +363,6 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHookOnlyPassedEpochs: false,
                 drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
@@ -525,19 +501,6 @@ contract DistributorV1Test is Test {
         distributor.claimFor(participant, Range({from: 0, length: 1}));
     }
 
-    function testClaimForTriggersDrainHook() public {
-        _setupParticipant();
-
-        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
-
-        assertFalse(drainHook.called());
-
-        vm.prank(address(0xCAFE));
-        distributor.claimFor(participant, Range({from: 0, length: 1}));
-
-        assertTrue(drainHook.called());
-    }
-
     function testClaimBehavesSameAsClaimForSelf() public {
         _setupParticipant();
 
@@ -661,8 +624,8 @@ contract DistributorV1Test is Test {
         assertEq(first, 100 ether);
 
         vm.prank(address(0xCAFE));
-        uint256 second = distributor.claimFor(participant, Range({from: 0, length: 1}));
-        assertEq(second, 0);
+        vm.expectRevert(bytes("nothing to claim"));
+        distributor.claimFor(participant, Range({from: 0, length: 1}));
     }
 
     function testOriginalClaimStillWorks() public {
@@ -692,10 +655,7 @@ contract DistributorV1Test is Test {
 
     // --- drainHookOnlyPassedEpochs tests ---
 
-    function _createDistributorWithDrainHook(bool onlyPassedEpochs, address hookAddress)
-        internal
-        returns (DistributorV1)
-    {
+    function _createDistributorWithDrainHook(address hookAddress) internal returns (DistributorV1) {
         DistributorV1 d = new DistributorV1(
             address(this),
             1000,
@@ -708,7 +668,6 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHookOnlyPassedEpochs: onlyPassedEpochs,
                 drainHook: Hook({contractAddress: hookAddress, callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
@@ -725,7 +684,7 @@ contract DistributorV1Test is Test {
 
     function testDrainHookOnlyPassedEpochsReleasesOnlyPassedParticipation() public {
         PullingHook pullingHook = new PullingHook(address(participationToken));
-        DistributorV1 limited = _createDistributorWithDrainHook(true, address(pullingHook));
+        DistributorV1 limited = _createDistributorWithDrainHook(address(pullingHook));
         participationToken.mint(participant, 20 ether);
 
         vm.startPrank(participant);
@@ -740,7 +699,7 @@ contract DistributorV1Test is Test {
         assertEq(limited.currentEpoch(), 1);
 
         vm.prank(participant);
-        limited.claim(Range({from: 0, length: 1}));
+        limited.callDrainHook();
 
         uint256 epochBalance = 10 ether;
         uint256 fee = (epochBalance * 1000) / 10000;
@@ -748,31 +707,9 @@ contract DistributorV1Test is Test {
         assertEq(participationToken.balanceOf(address(limited)), 10 ether, "epoch 2 participation remains");
     }
 
-    function testDrainHookOnlyPassedEpochsFalseReleasesAllBalance() public {
-        PullingHook pullingHook = new PullingHook(address(participationToken));
-        DistributorV1 unlimited = _createDistributorWithDrainHook(false, address(pullingHook));
-        participationToken.mint(participant, 20 ether);
-
-        vm.startPrank(participant);
-        participationToken.approve(address(unlimited), 20 ether);
-        unlimited.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
-        unlimited.participate(10 ether, Range({from: 2, length: 1}), participant, new bytes(0));
-        vm.stopPrank();
-
-        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
-
-        vm.prank(participant);
-        unlimited.claim(Range({from: 0, length: 1}));
-
-        uint256 totalBalance = 20 ether;
-        uint256 fee = (totalBalance * 1000) / 10000;
-        assertEq(pullingHook.pulled(), totalBalance - fee, "hook gets all minus fee");
-        assertEq(participationToken.balanceOf(address(unlimited)), 0, "all participation drained");
-    }
-
     function testDrainHookOnlyPassedEpochsMultiplePassedEpochs() public {
         PullingHook pullingHook = new PullingHook(address(participationToken));
-        DistributorV1 limited = _createDistributorWithDrainHook(true, address(pullingHook));
+        DistributorV1 limited = _createDistributorWithDrainHook(address(pullingHook));
         participationToken.mint(participant, 30 ether);
 
         vm.startPrank(participant);
@@ -784,7 +721,7 @@ contract DistributorV1Test is Test {
         assertEq(limited.currentEpoch(), 3);
 
         vm.prank(participant);
-        limited.claim(Range({from: 0, length: 1}));
+        limited.callDrainHook();
 
         uint256 epochSum = 30 ether;
         uint256 fee = (epochSum * 1000) / 10000;
@@ -794,7 +731,7 @@ contract DistributorV1Test is Test {
 
     function testDrainHookOnlyPassedEpochsNoPassedEpochsReleasesNothing() public {
         PullingHook pullingHook = new PullingHook(address(participationToken));
-        DistributorV1 limited = _createDistributorWithDrainHook(true, address(pullingHook));
+        DistributorV1 limited = _createDistributorWithDrainHook(address(pullingHook));
         participationToken.mint(participant, 10 ether);
 
         vm.startPrank(participant);
@@ -805,63 +742,11 @@ contract DistributorV1Test is Test {
         // Still in epoch 0 — no epochs have passed
         assertEq(limited.currentEpoch(), 0);
 
+        vm.expectRevert(bytes("all passed epochs already claimed"));
         limited.callDrainHook();
 
         assertEq(pullingHook.pulled(), 0, "no epochs passed, hook gets nothing");
         assertEq(participationToken.balanceOf(address(limited)), 10 ether, "all participation remains");
-    }
-
-    function testDrainHookOnlyPassedEpochsCapsAtActualBalance() public {
-        PullingHook pullingHook = new PullingHook(address(participationToken));
-        DistributorV1 limited = _createDistributorWithDrainHook(true, address(pullingHook));
-        participationToken.mint(participant, 10 ether);
-
-        vm.startPrank(participant);
-        participationToken.approve(address(limited), 10 ether);
-        limited.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
-        vm.stopPrank();
-
-        // Skim 5 ether from the contract — epoch total is 10 but actual balance is 5
-        uint256 skimAmount = 5 ether;
-        vm.prank(address(limited));
-        assertTrue(participationToken.transfer(address(0xDEAD), skimAmount));
-
-        assertEq(participationToken.balanceOf(address(limited)), 10 ether - skimAmount);
-
-        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
-
-        vm.prank(participant);
-        limited.claim(Range({from: 0, length: 1}));
-
-        uint256 actualBeforeFee = 10 ether - skimAmount;
-        uint256 fee = (actualBeforeFee * 1000) / 10000;
-        assertEq(pullingHook.pulled(), actualBeforeFee - fee, "hook gets capped balance minus fee");
-    }
-
-    function testDrainHookOnlyPassedEpochsFalseHookGetsMoreThanTrue() public {
-        PullingHook hookTrue = new PullingHook(address(participationToken));
-        PullingHook hookFalse = new PullingHook(address(participationToken));
-        DistributorV1 limited = _createDistributorWithDrainHook(true, address(hookTrue));
-        DistributorV1 unlimited = _createDistributorWithDrainHook(false, address(hookFalse));
-        participationToken.mint(participant, 40 ether);
-
-        vm.startPrank(participant);
-        participationToken.approve(address(limited), 20 ether);
-        limited.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
-        limited.participate(10 ether, Range({from: 2, length: 1}), participant, new bytes(0));
-        participationToken.approve(address(unlimited), 20 ether);
-        unlimited.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
-        unlimited.participate(10 ether, Range({from: 2, length: 1}), participant, new bytes(0));
-        vm.stopPrank();
-
-        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
-
-        vm.prank(participant);
-        limited.claim(Range({from: 0, length: 1}));
-        vm.prank(participant);
-        unlimited.claim(Range({from: 0, length: 1}));
-
-        assertTrue(hookFalse.pulled() > hookTrue.pulled(), "false mode should pull more than true mode");
     }
 
     function testAllowlistSignatureChainIdBindsToChain() public {
@@ -881,7 +766,6 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHookOnlyPassedEpochs: false,
                 drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))

@@ -31,7 +31,6 @@ contract DistributorV1 is ReentrancyGuard {
     uint256 public immutable MIN_PARTICIPATION;
     uint256 public immutable CLAIM_DELAY_SECONDS;
     bool public immutable ALLOW_FUTURE_EPOCH_PARTICIPATION;
-    bool public immutable DRAIN_HOOK_ONLY_PASSED_EPOCHS;
     address public immutable ALLOWLIST_SIGNER;
     uint256 public immutable ALLOWLIST_DEADLINE;
     uint256 public immutable NUMBER_OF_EPOCHS;
@@ -48,7 +47,7 @@ contract DistributorV1 is ReentrancyGuard {
     mapping(uint256 => mapping(address => uint256)) public epochUserParticipation;
 
     // tracks which epochs have had their drain hook called
-    uint256 public nextDrainHookToCall = 0;
+    uint256 public nextEpochToRelease = 0;
 
     mapping(address => uint256) public claimFeeBps;
 
@@ -67,7 +66,6 @@ contract DistributorV1 is ReentrancyGuard {
         MIN_PARTICIPATION = _config.minParticipation;
         CLAIM_DELAY_SECONDS = _config.claimDelaySeconds;
         ALLOW_FUTURE_EPOCH_PARTICIPATION = _config.allowFutureEpochParticipation;
-        DRAIN_HOOK_ONLY_PASSED_EPOCHS = _config.drainHookOnlyPassedEpochs;
         ALLOWLIST_SIGNER = _config.allowlistSigner;
         ALLOWLIST_DEADLINE = _config.allowlistDeadline;
         NUMBER_OF_EPOCHS = _config.numberOfEpochs;
@@ -239,8 +237,6 @@ contract DistributorV1 is ReentrancyGuard {
 
         require(block.timestamp >= lastEpochEndTime + CLAIM_DELAY_SECONDS, "Too soon to claim");
 
-        if (nextDrainHookToCall < currEpoch) callDrainHook();
-
         claimAmount = 0;
         for (uint256 i = 0; i < _range.length; i++) {
             uint256 epoch = _range.from + i;
@@ -285,48 +281,35 @@ contract DistributorV1 is ReentrancyGuard {
     }
 
     /**
-     * @notice this function not necessary called for each epoch it get called when someone call claim and will drain everything that is not already drained!
+     * @notice you should call this manually after each epoch ends
+     * @dev won't revert if hook fails (just returns false)
      */
-    function callDrainHook() public returns (bytes memory) {
-        uint256 fund;
+    function callDrainHook() public returns (bool success, bytes memory result) {
         uint256 currEpoch = currentEpoch();
 
-        if (DRAIN_HOOK_ONLY_PASSED_EPOCHS) {
-            for (uint256 i = nextDrainHookToCall; i < currEpoch; i++) {
-                fund += epochTotalParticipation[i];
-            }
-            uint256 balance = PARTICIPATION_TOKEN.balanceOf(address(this));
-            if (fund > balance) fund = balance;
-        } else {
-            fund = PARTICIPATION_TOKEN.balanceOf(address(this));
+        require(nextEpochToRelease < currEpoch, "all passed epochs already claimed");
+
+        uint256 fund;
+        for (uint256 i = nextEpochToRelease; i < currEpoch; i++) {
+            fund += epochTotalParticipation[i];
         }
+
+        require(fund > 0, "no fund to release");
 
         uint256 fee = (fund * PROTOCOL_FEE_BPS) / 10000;
-        PARTICIPATION_TOKEN.safeTransfer(PROTOCOL_FEE_RECEIVER, fee);
+        fund -= fee;
 
-        if (DRAIN_HOOK_ONLY_PASSED_EPOCHS) {
-            fund -= fee;
-            uint256 balance = PARTICIPATION_TOKEN.balanceOf(address(this));
-            if (fund > balance) fund = balance;
-        } else {
-            fund = PARTICIPATION_TOKEN.balanceOf(address(this));
-        }
-
+        // the call
         PARTICIPATION_TOKEN.forceApprove(drainHook.contractAddress, fund);
-
-        (bool success, bytes memory result) = drainHook.contractAddress.call(drainHook.callData);
-
-        if (!success) {
-            emit HookFailure(result);
-        }
-
+        (success, result) = drainHook.contractAddress.call(drainHook.callData);
         PARTICIPATION_TOKEN.forceApprove(drainHook.contractAddress, 0);
 
-        nextDrainHookToCall = currEpoch;
+        if (success) {
+            PARTICIPATION_TOKEN.safeTransfer(PROTOCOL_FEE_RECEIVER, fee);
+            nextEpochToRelease = currEpoch;
+        }
 
-        emit DrainHookCall(result, fund, nextDrainHookToCall);
-
-        return result;
+        emit DrainHookCall(result, fund, nextEpochToRelease);
     }
 }
 
@@ -341,7 +324,6 @@ contract DistributorV1 is ReentrancyGuard {
 /// @param allowFutureEpochParticipation whether users can participate in future epochs
 /// @param drainHook contract called after epoch ends (on first claim)
 /// @param emissionFunction calculates reward of an epoch (e.g. curve or linear function)
-/// @param drainHookOnlyPassedEpochs if true, drain hook only receives participation tokens for passed epochs instead of all balance
 /// @param allowlistSigner address that signs participation permits (address(0) = allowlist disabled)
 /// @param allowlistDeadline timestamp after which anyone can participate without a signature
 struct DistributorConfig {
@@ -352,7 +334,6 @@ struct DistributorConfig {
     uint256 minParticipation;
     uint256 claimDelaySeconds;
     bool allowFutureEpochParticipation;
-    bool drainHookOnlyPassedEpochs;
     Hook drainHook;
     EmissionFunction emissionFunction;
     address allowlistSigner;

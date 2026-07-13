@@ -55,7 +55,6 @@ contract FactoryV1Test is Test {
             minParticipation: 1 ether,
             claimDelaySeconds: claimDelaySeconds,
             allowFutureEpochParticipation: true,
-            drainHookOnlyPassedEpochs: false,
             drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
             emissionFunction: EmissionFunction({
                 emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
@@ -115,7 +114,7 @@ contract FactoryV1Test is Test {
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
         vm.prank(user);
-        distributor.claim(Range({from: 0, length: 1}));
+        distributor.callDrainHook();
 
         uint256 feeAfter = participationToken.balanceOf(protocolFeeReceiver);
         assertEq(feeAfter - feeBefore, (participationAmount * feeBps) / 10000);
