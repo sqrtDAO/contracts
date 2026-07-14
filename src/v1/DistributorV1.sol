@@ -185,6 +185,7 @@ contract DistributorV1 is ReentrancyGuard {
 
     function _participate(uint256 _amountPerEpoch, Range calldata _range, address _recipient) internal {
         uint256 currEpoch = currentEpoch();
+        require(block.timestamp >= STARTING_TIMESTAMP);
         require(_range.from >= currEpoch, "Passed epoch participation not allowed");
         require(_range.length != 0, "Range length is zero");
         require(_range.from + _range.length <= NUMBER_OF_EPOCHS, "Out of range");
