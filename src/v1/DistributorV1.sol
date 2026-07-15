@@ -175,15 +175,11 @@ contract DistributorV1 is ReentrancyGuard {
      */
     function participate(
         uint256 _amountPerEpoch,
-        Range calldata _range,
+        Range memory _range,
         address _recipient,
-        bytes calldata _allowlistSignature
-    ) external nonReentrant {
+        bytes memory _allowlistSignature
+    ) public nonReentrant {
         _verifyAllowlist(_allowlistSignature);
-        _participate(_amountPerEpoch, _range, _recipient);
-    }
-
-    function _participate(uint256 _amountPerEpoch, Range calldata _range, address _recipient) internal {
         uint256 currEpoch = currentEpoch();
         require(block.timestamp >= STARTING_TIMESTAMP);
         require(_range.from >= currEpoch, "Passed epoch participation not allowed");
@@ -207,10 +203,20 @@ contract DistributorV1 is ReentrancyGuard {
     }
 
     /**
+     * @notice calls participate in loop
+     * @dev useful when you need to have different amount for different epochs
+     */
+    function participateMany(ParticipateParams[] memory params) public {
+        for (uint256 i = 0; i < params.length; i++) {
+            participate(params[i].amountPerEpoch, params[i].range, params[i].recipient, params[i].allowlistSignature);
+        }
+    }
+
+    /**
      * @notice Verifies that the caller is allowlisted (via ECDSA signature).
      * @dev Skips check if allowlist is disabled (signer == address(0)) or deadline has passed.
      */
-    function _verifyAllowlist(bytes calldata _signature) internal view {
+    function _verifyAllowlist(bytes memory _signature) internal view {
         if (ALLOWLIST_SIGNER == address(0)) return;
         if (block.timestamp >= ALLOWLIST_DEADLINE) return;
         bytes32 message = keccak256(abi.encode(msg.sender, block.chainid));
@@ -362,4 +368,11 @@ struct EpochInfo {
 struct ClaimParams {
     address user;
     Range range;
+}
+
+struct ParticipateParams {
+    uint256 amountPerEpoch;
+    Range range;
+    address recipient;
+    bytes allowlistSignature;
 }
