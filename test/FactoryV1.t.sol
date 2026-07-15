@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import {Test} from "forge-std/Test.sol";
 import {FactoryV1} from "../src/v1/FactoryV1.sol";
 import {INonfungiblePositionManager} from "../src/external-interfaces/INonfungiblePositionManager.sol";
-import {DistributorV1, DistributorConfig, Range} from "../src/v1/DistributorV1.sol";
+import {DistributorV1, DistributorConfig} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Hook} from "src/utils/Hook.sol";

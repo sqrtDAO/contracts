@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {DistributorV1, DistributorConfig, Range} from "./DistributorV1.sol";
+import {DistributorV1, DistributorConfig} from "./DistributorV1.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -17,7 +17,7 @@ contract FactoryV1 is Ownable {
 
     uint256 public protocolFeeBps;
     address public protocolFeeReceiver;
-    INonfungiblePositionManager public immutable positionManager;
+    INonfungiblePositionManager public immutable POSITION_MANAGER;
 
     uint24 public constant LIQUIDITY_POOL_FEE = 3000; // 0.3%
 
@@ -34,7 +34,7 @@ contract FactoryV1 is Ownable {
     ) Ownable(_initialOwner) {
         protocolFeeBps = _protocolFeeBps;
         protocolFeeReceiver = _protocolFeeReceiver;
-        positionManager = _positionManager;
+        POSITION_MANAGER = _positionManager;
     }
 
     function checkContractDeployedByThis(address _contractAddress) public view returns (bool) {
@@ -74,10 +74,10 @@ contract FactoryV1 is Ownable {
         IERC20(token0).safeTransferFrom(msg.sender, address(this), amount0Desired);
         IERC20(token1).safeTransferFrom(msg.sender, address(this), amount1Desired);
 
-        IERC20(token0).approve(address(positionManager), amount0Desired);
-        IERC20(token1).approve(address(positionManager), amount1Desired);
+        IERC20(token0).approve(address(POSITION_MANAGER), amount0Desired);
+        IERC20(token1).approve(address(POSITION_MANAGER), amount1Desired);
 
-        pool = positionManager.createAndInitializePoolIfNecessary(token0, token1, LIQUIDITY_POOL_FEE, sqrtPriceX96);
+        pool = POSITION_MANAGER.createAndInitializePoolIfNecessary(token0, token1, LIQUIDITY_POOL_FEE, sqrtPriceX96);
 
         MintParams memory params = MintParams({
             token0: token0,
@@ -93,7 +93,7 @@ contract FactoryV1 is Ownable {
             deadline: type(uint256).max
         });
 
-        (tokenId, liquidity, amount0, amount1) = positionManager.mint(params);
+        (tokenId, liquidity, amount0, amount1) = POSITION_MANAGER.mint(params);
 
         uint256 refund0 = amount0Desired - amount0;
         if (refund0 > 0) IERC20(token0).safeTransfer(msg.sender, refund0);
