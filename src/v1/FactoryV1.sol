@@ -19,6 +19,8 @@ contract FactoryV1 is Ownable {
     address public protocolFeeReceiver;
     INonfungiblePositionManager public immutable positionManager;
 
+    uint24 public constant LIQUIDITY_POOL_FEE = 3000; // 0.3%
+
     /// (contract => creator)
     /// @dev this can be used to check if contract address is a valid contract created by this factory and not somewhere else
     /// but it saves creator address instead of bool "just in case"
@@ -87,14 +89,12 @@ contract FactoryV1 is Ownable {
         IERC20(token0).approve(address(positionManager), amount0Desired);
         IERC20(token1).approve(address(positionManager), amount1Desired);
 
-        uint24 FEE = 3000; // 0.3%
-
-        pool = positionManager.createAndInitializePoolIfNecessary(token0, token1, FEE, sqrtPriceX96);
+        pool = positionManager.createAndInitializePoolIfNecessary(token0, token1, LIQUIDITY_POOL_FEE, sqrtPriceX96);
 
         MintParams memory params = MintParams({
             token0: token0,
             token1: token1,
-            fee: FEE,
+            fee: LIQUIDITY_POOL_FEE,
             tickLower: -887272, // we don't care we are burning LP tokens
             tickUpper: 887272, // we don't care we are burning LP tokens
             amount0Desired: amount0Desired,
