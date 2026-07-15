@@ -31,7 +31,8 @@ contract FactoryV1 is Ownable {
     /// (contract => creator)
     /// @dev this can be used to check if contract address is a valid contract created by this factory and not somewhere else
     /// but it saves creator address instead of bool "just in case"
-    mapping(address => address) creatorOf;
+    mapping(address => address) creatorOf; // for tokens
+    mapping(address => address) distributorOf; // for distributions
 
     constructor(
         address _initialOwner,
@@ -43,10 +44,6 @@ contract FactoryV1 is Ownable {
         protocolFeeReceiver = _protocolFeeReceiver;
         POSITION_MANAGER = _positionManager;
         TRANSFER_TO_HOOK = new TransferToHook();
-    }
-
-    function checkContractDeployedByThis(address _contractAddress) public view returns (bool) {
-        return creatorOf[_contractAddress] != address(0);
     }
 
     function setProtocolFeeBps(uint256 _protocolFeeBps) public onlyOwner {
@@ -67,7 +64,7 @@ contract FactoryV1 is Ownable {
         IERC20(_config.distributionToken)
             .safeTransferFrom(msg.sender, distributorAddress, _config.totalDistributionAmount);
 
-        creatorOf[distributorAddress] = msg.sender;
+        distributorOf[distributorAddress] = msg.sender;
         emit NewDistributor(distributorAddress);
     }
 
@@ -114,9 +111,8 @@ contract FactoryV1 is Ownable {
         public
         returns (address tokenAddress)
     {
-        // Deploy new token – the total supply goes straight to the creator (msg.sender)
-        TokenV1 newToken = new TokenV1(_name, _symbol, _allocations);
-        tokenAddress = address(newToken);
+        tokenAddress = address(new TokenV1(_name, _symbol, _allocations));
+        creatorOf[tokenAddress] = msg.sender;
         emit NewToken(tokenAddress);
     }
 
