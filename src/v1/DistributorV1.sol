@@ -222,16 +222,10 @@ contract DistributorV1 is ReentrancyGuard {
     }
 
     /**
-     * @notice Allows a user to claim their rewards for participation in past epochs.
+     * @notice Allows a user to claim their rewards for participation in past epochs after claim delay.
      * @dev Calculates pro-rata reward share using (userAmount / epochTotal) * rewardOf(epoch).
-     * Calls drain hook on first claim after each epoch finishes.
-     * @param _range from and length.
      */
-    function claim(Range calldata _range) public returns (uint256) {
-        return claimFor(msg.sender, _range);
-    }
-
-    function claimFor(address _user, Range calldata _range) public nonReentrant returns (uint256 claimAmount) {
+    function claim(address _user, Range calldata _range) public nonReentrant returns (uint256 claimAmount) {
         uint256 lastEpochEndTime = STARTING_TIMESTAMP + ((_range.from + _range.length) * EPOCH_DURATION);
 
         require(block.timestamp >= lastEpochEndTime + CLAIM_DELAY_SECONDS, "Too soon to claim");
@@ -260,23 +254,21 @@ contract DistributorV1 is ReentrancyGuard {
         emit Claimed(_user, _range.from, _range.length, claimAmount);
     }
 
+    /**
+     * @notice calls claim in loop
+     * @dev useful for auto-claim bots that collect fees
+     * @return totalClaimed Total amount claimed across all ranges.
+     */
+    function claimMany(ClaimParams[] calldata params) external returns (uint256 totalClaimed) {
+        for (uint256 i = 0; i < params.length; i++) {
+            totalClaimed += claim(params[i].user, params[i].range);
+        }
+    }
+
     function setClaimFeeBps(uint256 _bps) external {
         require(_bps <= 10000, "max 10000 bps");
         claimFeeBps[msg.sender] = _bps;
         emit ClaimFeeBpsSet(msg.sender, _bps);
-    }
-
-    /**
-     * @notice Allows a user to claim their rewards for participation in multiple claim ranges.
-     * @dev Internally calls claim() for each range and returns the total claimed amount.
-     * @param ranges Array of ClaimRange structs containing startingEpoch and numEpochs.
-     * @return totalClaimed Total amount claimed across all ranges.
-     */
-    function claimMany(Range[] calldata ranges) external returns (uint256 totalClaimed) {
-        for (uint256 i = 0; i < ranges.length; i++) {
-            totalClaimed += claim(ranges[i]);
-        }
-        return totalClaimed;
     }
 
     /**
@@ -365,4 +357,9 @@ struct EpochInfo {
     uint256 rewardAmount;
     // epochPassedTime can be calculated => (NOW - STARTING_TIMESTAMP) % EPOCH_DURATION
     // epochRemainingTime can be calculated => EPOCH_DURATION - epochPassedTime
+}
+
+struct ClaimParams {
+    address user;
+    Range range;
 }
