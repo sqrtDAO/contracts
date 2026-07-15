@@ -76,7 +76,7 @@ contract DistributorV1Test is Test {
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
         vm.prank(participant);
-        uint256 claimed = distributor.claim(Range({from: 0, length: 1}));
+        uint256 claimed = distributor.claim(participant, Range({from: 0, length: 1}));
 
         assertEq(claimed, 100 ether);
         assertEq(distributionToken.balanceOf(participant), 100 ether);
@@ -92,7 +92,7 @@ contract DistributorV1Test is Test {
 
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds - 1);
         vm.expectRevert(bytes("Too soon to claim"));
-        distributor.claim(Range({from: 0, length: 1}));
+        distributor.claim(address(this), Range({from: 0, length: 1}));
     }
 
     function testGetInfoReturnsClaimDelaySeconds() public view {
@@ -175,12 +175,12 @@ contract DistributorV1Test is Test {
         uint256 expectedUserB = (userBAmount * 100 ether) / (userAAmount + userBAmount);
 
         vm.prank(userA);
-        uint256 claimedA = distributor.claim(Range({from: 0, length: 1}));
+        uint256 claimedA = distributor.claim(userA, Range({from: 0, length: 1}));
         assertEq(claimedA, expectedUserA);
         assertEq(distributionToken.balanceOf(userA), expectedUserA);
 
         vm.prank(userB);
-        uint256 claimedB = distributor.claim(Range({from: 0, length: 1}));
+        uint256 claimedB = distributor.claim(userB, Range({from: 0, length: 1}));
         assertEq(claimedB, expectedUserB);
         assertEq(distributionToken.balanceOf(userB), expectedUserB);
 
@@ -415,7 +415,7 @@ contract DistributorV1Test is Test {
         distributor.setClaimFeeBps(500); // 5%
 
         vm.prank(participant);
-        uint256 claimed = distributor.claimFor(participant, Range({from: 0, length: 1}));
+        uint256 claimed = distributor.claim(participant, Range({from: 0, length: 1}));
 
         assertEq(claimed, 100 ether);
         assertEq(distributionToken.balanceOf(participant), 100 ether);
@@ -432,7 +432,7 @@ contract DistributorV1Test is Test {
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
         vm.prank(thirdParty);
-        uint256 claimed = distributor.claimFor(participant, Range({from: 0, length: 1}));
+        uint256 claimed = distributor.claim(participant, Range({from: 0, length: 1}));
 
         uint256 expectedFee = (100 ether * 200) / 10000;
         uint256 expectedUser = 100 ether - expectedFee;
@@ -452,7 +452,7 @@ contract DistributorV1Test is Test {
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
         vm.prank(thirdParty);
-        uint256 claimed = distributor.claimFor(participant, Range({from: 0, length: 1}));
+        uint256 claimed = distributor.claim(participant, Range({from: 0, length: 1}));
 
         assertEq(claimed, 100 ether);
         assertEq(distributionToken.balanceOf(participant), 100 ether);
@@ -470,7 +470,7 @@ contract DistributorV1Test is Test {
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
         vm.prank(thirdParty);
-        uint256 claimed = distributor.claimFor(participant, Range({from: 0, length: 1}));
+        uint256 claimed = distributor.claim(participant, Range({from: 0, length: 1}));
 
         assertEq(claimed, 0);
         assertEq(distributionToken.balanceOf(participant), 0);
@@ -485,7 +485,7 @@ contract DistributorV1Test is Test {
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
         vm.prank(address(0xCAFE));
-        distributor.claimFor(participant, Range({from: 0, length: 1}));
+        distributor.claim(participant, Range({from: 0, length: 1}));
 
         assertEq(distributor.epochUserParticipation(0, participant), 0);
     }
@@ -497,7 +497,7 @@ contract DistributorV1Test is Test {
 
         vm.prank(address(0xCAFE));
         vm.expectRevert(bytes("Too soon to claim"));
-        distributor.claimFor(participant, Range({from: 0, length: 1}));
+        distributor.claim(participant, Range({from: 0, length: 1}));
     }
 
     function testClaimBehavesSameAsClaimForSelf() public {
@@ -516,10 +516,10 @@ contract DistributorV1Test is Test {
         uint256 expected = (10 ether * 100 ether) / (20 ether);
 
         vm.prank(participant);
-        uint256 claimedViaClaim = distributor.claim(Range({from: 0, length: 1}));
+        uint256 claimedViaClaim = distributor.claim(participant, Range({from: 0, length: 1}));
 
         vm.prank(secondUser);
-        uint256 claimedViaClaimFor = distributor.claimFor(secondUser, Range({from: 0, length: 1}));
+        uint256 claimedViaClaimFor = distributor.claim(secondUser, Range({from: 0, length: 1}));
 
         assertEq(claimedViaClaim, expected);
         assertEq(claimedViaClaimFor, expected);
@@ -533,7 +533,7 @@ contract DistributorV1Test is Test {
         vm.warp(startTimestamp + (2 * epochDuration) + claimDelaySeconds);
 
         vm.prank(address(0xCAFE));
-        uint256 totalClaimed = distributor.claimFor(participant, Range({from: 0, length: 2}));
+        uint256 totalClaimed = distributor.claim(participant, Range({from: 0, length: 2}));
 
         assertEq(totalClaimed, 200 ether);
         assertEq(distributionToken.balanceOf(participant), 200 ether);
@@ -568,10 +568,10 @@ contract DistributorV1Test is Test {
         uint256 userBReward = (10 ether * 100 ether) / (20 ether);
 
         vm.prank(thirdParty);
-        uint256 claimedA = distributor.claimFor(userA, Range({from: 0, length: 1}));
+        uint256 claimedA = distributor.claim(userA, Range({from: 0, length: 1}));
 
         vm.prank(thirdParty);
-        uint256 claimedB = distributor.claimFor(userB, Range({from: 0, length: 1}));
+        uint256 claimedB = distributor.claim(userB, Range({from: 0, length: 1}));
 
         uint256 feeA = (userAReward * 1000) / 10000;
         uint256 feeB = (userBReward * 200) / 10000;
@@ -592,7 +592,7 @@ contract DistributorV1Test is Test {
         emit DistributorV1.Claimed(participant, 0, 1, 100 ether);
 
         vm.prank(address(0xCAFE));
-        distributor.claimFor(participant, Range({from: 0, length: 1}));
+        distributor.claim(participant, Range({from: 0, length: 1}));
     }
 
     function testClaimForFeeEmitsClaimedWithReducedAmount() public {
@@ -609,7 +609,7 @@ contract DistributorV1Test is Test {
         emit DistributorV1.Claimed(participant, 0, 1, expectedUserAmount);
 
         vm.prank(address(0xCAFE));
-        distributor.claimFor(participant, Range({from: 0, length: 1}));
+        distributor.claim(participant, Range({from: 0, length: 1}));
     }
 
     function testClaimForIsNotReentrant() public {
@@ -617,14 +617,14 @@ contract DistributorV1Test is Test {
 
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
-        // call claimFor twice — second call should get 0 since participation is zeroed
+        // call claim twice — second call should get 0 since participation is zeroed
         vm.prank(address(0xCAFE));
-        uint256 first = distributor.claimFor(participant, Range({from: 0, length: 1}));
+        uint256 first = distributor.claim(participant, Range({from: 0, length: 1}));
         assertEq(first, 100 ether);
 
         vm.prank(address(0xCAFE));
         vm.expectRevert(bytes("nothing to claim"));
-        distributor.claimFor(participant, Range({from: 0, length: 1}));
+        distributor.claim(participant, Range({from: 0, length: 1}));
     }
 
     function testOriginalClaimStillWorks() public {
@@ -633,7 +633,7 @@ contract DistributorV1Test is Test {
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
         vm.prank(participant);
-        uint256 claimed = distributor.claim(Range({from: 0, length: 1}));
+        uint256 claimed = distributor.claim(participant, Range({from: 0, length: 1}));
 
         assertEq(claimed, 100 ether);
         assertEq(distributionToken.balanceOf(participant), 100 ether);
