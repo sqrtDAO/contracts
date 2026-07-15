@@ -121,7 +121,7 @@ contract FactoryV1 is Ownable {
     }
 
     /// utils
-    function _injectProtocolFeeShare(DistributorConfig memory _config) internal {
+    function _injectProtocolFeeShare(DistributorConfig memory _config) internal view {
         Share[] memory newShares = new Share[](_config.shares.length + 1);
 
         for (uint256 i; i < _config.shares.length; ++i) {
