@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {DistributorV1, DistributorConfig, Range, GetInfoResult} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
+import {Share} from "src/utils/Shares.sol";
 import {Hook} from "src/utils/Hook.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -15,7 +16,6 @@ contract DistributorV1Test is Test {
     ERC20Mock public distributionToken;
     ERC20Mock public participationToken;
     FixedEmission public emission;
-    DummyHook public drainHook;
 
     address public protocolFeeReceiver = address(0xBEEF);
     address public participant = address(0x1234);
@@ -30,17 +30,16 @@ contract DistributorV1Test is Test {
         distributionToken = new ERC20Mock();
         participationToken = new ERC20Mock();
         emission = new FixedEmission();
-        drainHook = new DummyHook();
 
         distributionToken.mint(address(this), 1_000 ether);
         participationToken.mint(participant, 1_000 ether);
 
         require(distributionToken.transfer(address(this), 0), "transfer failed"); // no-op to keep balances consistent
 
+        Share[] memory shares = _singleShare(10000, address(0), "");
+
         distributor = new DistributorV1(
             address(this),
-            1000,
-            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -49,10 +48,10 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
+                shares: shares,
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
                 numberOfEpochs: 100,
@@ -213,10 +212,10 @@ contract DistributorV1Test is Test {
     }
 
     function testFutureEpochParticipationNotAllowed() public {
+        Share[] memory shares = _singleShare(10000, address(0), "");
+
         DistributorV1 noFutureDistributor = new DistributorV1(
             address(this),
-            1000,
-            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -225,10 +224,10 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: false,
-                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
+                shares: shares,
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
                 numberOfEpochs: 100,
@@ -268,10 +267,10 @@ contract DistributorV1Test is Test {
         address signer = vm.addr(signerPk);
         uint256 deadline = block.timestamp + epochDuration;
 
+        Share[] memory shares = _singleShare(10000, address(0), "");
+
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
-            1000,
-            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -280,10 +279,10 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
+                shares: shares,
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
@@ -307,10 +306,10 @@ contract DistributorV1Test is Test {
         address signer = vm.addr(signerPk);
         uint256 deadline = block.timestamp + epochDuration;
 
+        Share[] memory shares = _singleShare(10000, address(0), "");
+
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
-            1000,
-            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -319,10 +318,10 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
+                shares: shares,
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
@@ -351,10 +350,10 @@ contract DistributorV1Test is Test {
 
         uint256 deadline = startTimestamp + epochDuration / 2;
 
+        Share[] memory shares = _singleShare(10000, address(0), "");
+
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
-            1000,
-            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -363,10 +362,10 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
+                shares: shares,
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
@@ -642,6 +641,16 @@ contract DistributorV1Test is Test {
 
     // --- helpers ---
 
+    function _singleShare(uint256 bps, address hookAddress, bytes memory callData)
+        internal
+        pure
+        returns (Share[] memory)
+    {
+        Share[] memory shares = new Share[](1);
+        shares[0] = Share({shareBps: bps, hook: Hook({contractAddress: hookAddress, callData: callData})});
+        return shares;
+    }
+
     function _setupParticipant() internal {
         _setupParticipant(1);
     }
@@ -656,10 +665,10 @@ contract DistributorV1Test is Test {
     // --- drainHookOnlyPassedEpochs tests ---
 
     function _createDistributorWithDrainHook(address hookAddress) internal returns (DistributorV1) {
+        Share[] memory shares = _singleShare(10000, hookAddress, "");
+
         DistributorV1 d = new DistributorV1(
             address(this),
-            1000,
-            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -668,10 +677,10 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHook: Hook({contractAddress: hookAddress, callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
+                shares: shares,
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
                 numberOfEpochs: 100,
@@ -702,8 +711,7 @@ contract DistributorV1Test is Test {
         limited.callDrainHook();
 
         uint256 epochBalance = 10 ether;
-        uint256 fee = (epochBalance * 1000) / 10000;
-        assertEq(pullingHook.pulled(), epochBalance - fee, "hook gets epoch 0 minus fee");
+        assertEq(pullingHook.pulled(), epochBalance, "hook gets full epoch 0 amount");
         assertEq(participationToken.balanceOf(address(limited)), 10 ether, "epoch 2 participation remains");
     }
 
@@ -724,8 +732,7 @@ contract DistributorV1Test is Test {
         limited.callDrainHook();
 
         uint256 epochSum = 30 ether;
-        uint256 fee = (epochSum * 1000) / 10000;
-        assertEq(pullingHook.pulled(), epochSum - fee, "hook gets all 3 epochs minus fee");
+        assertEq(pullingHook.pulled(), epochSum, "hook gets all 3 epochs");
         assertEq(participationToken.balanceOf(address(limited)), 0, "all participation drained");
     }
 
@@ -754,10 +761,10 @@ contract DistributorV1Test is Test {
         address signer = vm.addr(signerPk);
         uint256 deadline = block.timestamp + epochDuration;
 
+        Share[] memory shares = _singleShare(10000, address(0), "");
+
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
-            1000,
-            protocolFeeReceiver,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -766,10 +773,10 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
-                drainHook: Hook({contractAddress: address(drainHook), callData: ""}),
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
+                shares: shares,
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
