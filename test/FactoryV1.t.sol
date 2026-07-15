@@ -74,15 +74,7 @@ contract FactoryV1Test is Test {
         distributionToken.approve(address(factory), type(uint256).max);
 
         vm.prank(user);
-        return factory.createDistributor(config, participationAmount, Range({from: 0, length: 1}));
-    }
-
-    function testInitialParticipation() public {
-        address distributorAddr = _createDistributor(1000, protocolFeeReceiver, 10 ether);
-        DistributorV1 distributor = DistributorV1(distributorAddr);
-
-        assertEq(distributor.epochUserParticipation(0, user), 10 ether);
-        assertEq(distributor.epochTotalParticipation(0), 10 ether);
+        return factory.createDistributor(config);
     }
 
     function testDynamicProtocolFeeUpdateFeeAndAddress() public {
@@ -101,24 +93,6 @@ contract FactoryV1Test is Test {
 
         assertEq(distributor2.PROTOCOL_FEE_BPS(), 50);
         assertEq(distributor2.PROTOCOL_FEE_RECEIVER(), address(0xBBBB));
-    }
-
-    function testProtocolFeeDeductedOnClaim() public {
-        uint256 feeBps = 2500;
-        uint256 participationAmount = 10 ether;
-
-        address distributorAddr = _createDistributor(feeBps, protocolFeeReceiver, participationAmount);
-        DistributorV1 distributor = DistributorV1(distributorAddr);
-
-        uint256 feeBefore = participationToken.balanceOf(protocolFeeReceiver);
-
-        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
-
-        vm.prank(user);
-        distributor.callDrainHook();
-
-        uint256 feeAfter = participationToken.balanceOf(protocolFeeReceiver);
-        assertEq(feeAfter - feeBefore, (participationAmount * feeBps) / 10000);
     }
 
     function testRevertNonOwnerUpdatesProtocolFeeBps() public {

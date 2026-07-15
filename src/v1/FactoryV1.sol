@@ -51,23 +51,11 @@ contract FactoryV1 is Ownable {
 
     /// @dev Make sure you give allowance to Factory contract before call this
     /// allowance to both participation token (for initial participation) and distribution token to transfer totalDistributionAmount to distribution contract
-    function createDistributor(
-        DistributorConfig memory _config,
-        uint256 _participationAmountPerEpoch,
-        Range calldata _participationRange
-    ) external returns (address distributorAddress) {
-        DistributorV1 distributor = new DistributorV1(address(this), protocolFeeBps, protocolFeeReceiver, _config);
+    function createDistributor(DistributorConfig memory _config) external returns (address distributorAddress) {
+        DistributorV1 distributor = new DistributorV1(msg.sender, protocolFeeBps, protocolFeeReceiver, _config);
 
         IERC20(_config.distributionToken)
             .safeTransferFrom(msg.sender, address(distributor), _config.totalDistributionAmount);
-
-        uint256 initialParticipationAmount = _participationAmountPerEpoch * _participationRange.length;
-
-        IERC20(_config.participationToken).safeTransferFrom(msg.sender, address(this), initialParticipationAmount);
-
-        IERC20(_config.participationToken).approve(address(distributor), initialParticipationAmount);
-
-        distributor.participate(_participationAmountPerEpoch, _participationRange, msg.sender, new bytes(0)); // msg.sender set as recipient so it can claim
 
         distributorAddress = address(distributor);
         creatorOf[distributorAddress] = msg.sender;
@@ -82,7 +70,7 @@ contract FactoryV1 is Ownable {
         uint160 sqrtPriceX96,
         uint256 amount0Desired,
         uint256 amount1Desired
-    ) external returns (address pool, uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
+    ) public returns (address pool, uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
         IERC20(token0).safeTransferFrom(msg.sender, address(this), amount0Desired);
         IERC20(token1).safeTransferFrom(msg.sender, address(this), amount1Desired);
 
@@ -114,8 +102,7 @@ contract FactoryV1 is Ownable {
     }
 
     function createToken(string memory _name, string memory _symbol, Allocation[] memory _allocations)
-        external
-        payable
+        public
         returns (address tokenAddress)
     {
         // Deploy new token – the total supply goes straight to the creator (msg.sender)
