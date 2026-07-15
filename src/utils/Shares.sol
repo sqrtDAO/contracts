@@ -5,8 +5,8 @@ import {Hook, HookLib} from "src/utils/Hook.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 struct Share {
-    // formula: (amountIn * share.shareBps) / 10000
-    // protocol fee in basis points e.g. 50 means 0.5%
+    /// formula: (amountIn * share.shareBps) / 10000
+    /// protocol fee in basis points e.g. 50 means 0.5%
     uint256 shareBps;
     Hook hook;
 }

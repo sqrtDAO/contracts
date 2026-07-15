@@ -6,17 +6,24 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {TokenV1, Allocation} from "./TokenV1.sol";
+import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
 import {MintParams} from "../external-interfaces/INonfungiblePositionManager.sol";
 import {INonfungiblePositionManager} from "../external-interfaces/INonfungiblePositionManager.sol";
+import {SharesLib, Share} from "src/utils/Shares.sol";
+import {Hook} from "src/utils/Hook.sol";
 
 contract FactoryV1 is Ownable {
     using SafeERC20 for IERC20;
+    using SharesLib for Share[];
+    using SharesLib for Share;
 
     event NewDistributor(address indexed distributor);
     event NewToken(address indexed tokenAddress);
 
     uint256 public protocolFeeBps;
     address public protocolFeeReceiver;
+
+    TransferToHook public immutable TRANSFER_TO_HOOK;
     INonfungiblePositionManager public immutable POSITION_MANAGER;
 
     uint24 public constant LIQUIDITY_POOL_FEE = 3000; // 0.3%
@@ -35,6 +42,7 @@ contract FactoryV1 is Ownable {
         protocolFeeBps = _protocolFeeBps;
         protocolFeeReceiver = _protocolFeeReceiver;
         POSITION_MANAGER = _positionManager;
+        TRANSFER_TO_HOOK = new TransferToHook();
     }
 
     function checkContractDeployedByThis(address _contractAddress) public view returns (bool) {
@@ -51,13 +59,14 @@ contract FactoryV1 is Ownable {
 
     /// @dev Make sure you give allowance to Factory contract before call this
     /// allowance to both participation token (for initial participation) and distribution token to transfer totalDistributionAmount to distribution contract
+    /// @notice for _config.shares, make sure it sums up to (100% - protocolFeeBps) because this function force injects protocol fee to _config.shares
     function createDistributor(DistributorConfig memory _config) external returns (address distributorAddress) {
-        DistributorV1 distributor = new DistributorV1(msg.sender, protocolFeeBps, protocolFeeReceiver, _config);
+        _injectProtocolFeeShare(_config);
+        distributorAddress = address(new DistributorV1(msg.sender, _config));
 
         IERC20(_config.distributionToken)
-            .safeTransferFrom(msg.sender, address(distributor), _config.totalDistributionAmount);
+            .safeTransferFrom(msg.sender, distributorAddress, _config.totalDistributionAmount);
 
-        distributorAddress = address(distributor);
         creatorOf[distributorAddress] = msg.sender;
         emit NewDistributor(distributorAddress);
     }
@@ -109,5 +118,23 @@ contract FactoryV1 is Ownable {
         TokenV1 newToken = new TokenV1(_name, _symbol, _allocations);
         tokenAddress = address(newToken);
         emit NewToken(tokenAddress);
+    }
+
+    /// utils
+    function _injectProtocolFeeShare(DistributorConfig memory _config) internal {
+        Share[] memory newShares = new Share[](_config.shares.length + 1);
+
+        for (uint256 i; i < _config.shares.length; ++i) {
+            newShares[i] = _config.shares[i];
+        }
+
+        newShares[_config.shares.length] = Share({
+            shareBps: protocolFeeBps,
+            hook: Hook({
+                contractAddress: address(TRANSFER_TO_HOOK),
+                callData: abi.encodeCall(TransferToHook.transferTo, (_config.distributionToken, protocolFeeReceiver))
+            })
+        });
+        _config.shares = newShares;
     }
 }

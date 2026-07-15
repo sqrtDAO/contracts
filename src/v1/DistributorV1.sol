@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Hook} from "src/utils/Hook.sol";
+import {Share, SharesLib} from "src/utils/Shares.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -14,6 +15,8 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 /// @dev Extend this contract for versioned implementations like `DistributorV1`.
 contract DistributorV1 is ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using SharesLib for Share;
+    using SharesLib for Share[];
 
     event Participated(
         address indexed participant, address recipient, uint256 fromEpoch, uint256 numEpochs, uint256 amountPerEpoch
@@ -26,8 +29,6 @@ contract DistributorV1 is ReentrancyGuard {
     IERC20 public immutable PARTICIPATION_TOKEN;
     uint256 public immutable EPOCH_DURATION;
     uint256 public immutable STARTING_TIMESTAMP;
-    uint256 public immutable PROTOCOL_FEE_BPS;
-    address public immutable PROTOCOL_FEE_RECEIVER;
     uint256 public immutable MIN_PARTICIPATION;
     uint256 public immutable CLAIM_DELAY_SECONDS;
     bool public immutable ALLOW_FUTURE_EPOCH_PARTICIPATION;
@@ -38,7 +39,8 @@ contract DistributorV1 is ReentrancyGuard {
     address public immutable CREATOR;
 
     EmissionFunction public emissionFunction;
-    Hook public drainHook;
+
+    Share[] public shares;
 
     // total amount users participated to an epoch
     mapping(uint256 => uint256) public epochTotalParticipation;
@@ -51,18 +53,11 @@ contract DistributorV1 is ReentrancyGuard {
 
     mapping(address => uint256) public claimFeeBps;
 
-    constructor(
-        address _creator,
-        uint256 _protocolFeeBps,
-        address _protocolFeeReceiver,
-        DistributorConfig memory _config
-    ) {
+    constructor(address _creator, DistributorConfig memory _config) {
         DISTRIBUTION_TOKEN = IERC20(_config.distributionToken);
         PARTICIPATION_TOKEN = IERC20(_config.participationToken);
         EPOCH_DURATION = _config.epochDuration;
         STARTING_TIMESTAMP = _config.startTimestamp;
-        PROTOCOL_FEE_BPS = _protocolFeeBps;
-        PROTOCOL_FEE_RECEIVER = _protocolFeeReceiver;
         MIN_PARTICIPATION = _config.minParticipation;
         CLAIM_DELAY_SECONDS = _config.claimDelaySeconds;
         ALLOW_FUTURE_EPOCH_PARTICIPATION = _config.allowFutureEpochParticipation;
@@ -71,8 +66,10 @@ contract DistributorV1 is ReentrancyGuard {
         NUMBER_OF_EPOCHS = _config.numberOfEpochs;
         TOTAL_DISTRIBUTION_AMOUNT = _config.totalDistributionAmount;
         CREATOR = _creator;
-        drainHook = _config.drainHook;
+        shares = _config.shares;
         emissionFunction = _config.emissionFunction;
+
+        _config.shares.validateShares(); // reverts if shares are not sum up to 100%
     }
 
     /**
@@ -292,20 +289,12 @@ contract DistributorV1 is ReentrancyGuard {
         for (uint256 i = nextEpochToRelease; i < currEpoch; i++) {
             fund += epochTotalParticipation[i];
         }
+        nextEpochToRelease = currEpoch;
 
         require(fund > 0, "no fund to release");
 
-        uint256 fee = (fund * PROTOCOL_FEE_BPS) / 10000;
-        fund -= fee;
-
-        // the call
-        PARTICIPATION_TOKEN.forceApprove(drainHook.contractAddress, fund);
-        (success, result) = drainHook.contractAddress.call(drainHook.callData);
-        PARTICIPATION_TOKEN.forceApprove(drainHook.contractAddress, 0);
-
-        if (success) {
-            PARTICIPATION_TOKEN.safeTransfer(PROTOCOL_FEE_RECEIVER, fee);
-            nextEpochToRelease = currEpoch;
+        for (uint256 i = 0; i < shares.length; i++) {
+            shares[i].approveAndCall(PARTICIPATION_TOKEN, fund);
         }
 
         emit DrainHookCall(result, fund, nextEpochToRelease);
@@ -321,7 +310,7 @@ contract DistributorV1 is ReentrancyGuard {
 /// @param minParticipation minimum amount per-epoch a participant must provide
 /// @param claimDelaySeconds number of seconds a user must wait after an epoch ends before claiming
 /// @param allowFutureEpochParticipation whether users can participate in future epochs
-/// @param drainHook contract called after epoch ends (on first claim)
+/// @param shares split epoch fund to these hook calls after epoch ends
 /// @param emissionFunction calculates reward of an epoch (e.g. curve or linear function)
 /// @param allowlistSigner address that signs participation permits (address(0) = allowlist disabled)
 /// @param allowlistDeadline timestamp after which anyone can participate without a signature
@@ -333,7 +322,7 @@ struct DistributorConfig {
     uint256 minParticipation;
     uint256 claimDelaySeconds;
     bool allowFutureEpochParticipation;
-    Hook drainHook;
+    Share[] shares;
     EmissionFunction emissionFunction;
     address allowlistSigner;
     uint256 allowlistDeadline;
