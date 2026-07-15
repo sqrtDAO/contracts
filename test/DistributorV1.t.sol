@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
-import {DistributorV1, DistributorConfig, Range, GetInfoResult} from "../src/v1/DistributorV1.sol";
+import {DistributorV1, DistributorConfig, Range, GetContractInfoResult, EpochInfo} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Share} from "src/utils/Shares.sol";
@@ -96,7 +96,7 @@ contract DistributorV1Test is Test {
     }
 
     function testGetInfoReturnsClaimDelaySeconds() public view {
-        GetInfoResult memory info = distributor.getInfo(address(0), Range({from: 0, length: 0}));
+        GetContractInfoResult memory info = distributor.getContractInfo();
 
         assertEq(info.claimDelaySeconds, claimDelaySeconds);
         assertEq(info.distributionToken, address(distributionToken));
@@ -112,15 +112,15 @@ contract DistributorV1Test is Test {
         vm.prank(participant);
         distributor.participate(10 ether, Range({from: 0, length: 2}), participant, new bytes(0));
 
-        GetInfoResult memory info = distributor.getInfo(participant, Range({from: 0, length: 2}));
+        EpochInfo[] memory epochs = distributor.getEpochInfo(participant, Range({from: 0, length: 2}));
 
-        assertEq(info.epochs.length, 2);
-        assertEq(info.epochs[0].userParticipationAmount, 10 ether);
-        assertEq(info.epochs[0].totalParticipationAmount, 10 ether);
-        assertEq(info.epochs[0].rewardAmount, 100 ether);
-        assertEq(info.epochs[1].userParticipationAmount, 10 ether);
-        assertEq(info.epochs[1].totalParticipationAmount, 10 ether);
-        assertEq(info.epochs[1].rewardAmount, 100 ether);
+        assertEq(epochs.length, 2);
+        assertEq(epochs[0].userParticipationAmount, 10 ether);
+        assertEq(epochs[0].totalParticipationAmount, 10 ether);
+        assertEq(epochs[0].rewardAmount, 100 ether);
+        assertEq(epochs[1].userParticipationAmount, 10 ether);
+        assertEq(epochs[1].totalParticipationAmount, 10 ether);
+        assertEq(epochs[1].rewardAmount, 100 ether);
     }
 
     function testDiscoverRewardsReturnsParticipatedEpochs() public {
