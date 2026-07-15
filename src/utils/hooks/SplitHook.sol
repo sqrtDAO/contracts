@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {Hook, HookFailure} from "src/utils/Hook.sol";
+import {Share, SharesLib} from "src/utils/Shares.sol";
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract SplitterHook {
     using SafeERC20 for IERC20;
-
-    event Split(uint256 amount, bytes[] results);
+    using SharesLib for Share;
+    using SharesLib for Share[];
 
     /**
      * @notice spend all the _token allowance and split funds between _shares
@@ -22,24 +23,9 @@ contract SplitterHook {
         uint256 amountIn = IERC20(_token).allowance(msg.sender, address(this));
         token.safeTransferFrom(msg.sender, address(this), amountIn);
 
-        bytes[] memory results = new bytes[](_shares.length);
-
         for (uint256 i = 0; i < _shares.length; i++) {
             Share calldata share = _shares[i];
-            token.forceApprove(share.hook.contractAddress, (amountIn * share.shareBps) / 10000);
-
-            (bool success, bytes memory result) = share.hook.contractAddress.call(share.hook.callData);
-            if (!success) emit HookFailure(result);
-            results[i] = result;
-
-            token.forceApprove(share.hook.contractAddress, 0);
+            share.approveAndCall(token, amountIn);
         }
-
-        emit Split(amountIn, results);
     }
-}
-
-struct Share {
-    uint256 shareBps; // protocol fee in basis points e.g. 50 means 0.5%
-    Hook hook;
 }
