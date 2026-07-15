@@ -91,25 +91,11 @@ contract DistributorV1 is ReentrancyGuard {
     }
 
     /**
-     * @notice used to read epochs information
-     * @dev pass 0,0 as range if you only want to read general emission information
-     * @param user The epoch to calculate reward for.
-     * @param range of epochs to get info
+     * @notice used to read contract information in single call
      * @return result information of epochs in an specified range
      */
-    function getInfo(address user, Range calldata range) external view returns (GetInfoResult memory result) {
-        EpochInfo[] memory epochs = new EpochInfo[](range.length);
-
-        for (uint256 i = 0; i < range.length; i++) {
-            uint256 epoch = range.from + i;
-            epochs[i] = EpochInfo({
-                userParticipationAmount: epochUserParticipation[epoch][user],
-                totalParticipationAmount: epochTotalParticipation[epoch],
-                rewardAmount: rewardOf(epoch)
-            });
-        }
-
-        return GetInfoResult({
+    function getContractInfo() external view returns (GetContractInfoResult memory result) {
+        return GetContractInfoResult({
             distributionToken: address(DISTRIBUTION_TOKEN),
             participationToken: address(PARTICIPATION_TOKEN),
             epochDuration: EPOCH_DURATION,
@@ -120,8 +106,26 @@ contract DistributorV1 is ReentrancyGuard {
             numberOfEpochs: NUMBER_OF_EPOCHS,
             totalDistributionAmount: TOTAL_DISTRIBUTION_AMOUNT,
             creator: CREATOR,
-            epochs: epochs
+            shares: shares
         });
+    }
+
+    /**
+     * @notice used to read epochs information
+     * @param user The epoch to calculate reward for.
+     * @param range of epochs to get info
+     */
+    function getEpochInfo(address user, Range calldata range) external view returns (EpochInfo[] memory epochs) {
+        epochs = new EpochInfo[](range.length);
+
+        for (uint256 i = 0; i < range.length; i++) {
+            uint256 epoch = range.from + i;
+            epochs[i] = EpochInfo({
+                userParticipationAmount: epochUserParticipation[epoch][user],
+                totalParticipationAmount: epochTotalParticipation[epoch],
+                rewardAmount: rewardOf(epoch)
+            });
+        }
     }
 
     /**
@@ -335,7 +339,7 @@ struct Range {
     uint256 length;
 }
 
-struct GetInfoResult {
+struct GetContractInfoResult {
     address distributionToken;
     address participationToken;
 
@@ -350,8 +354,7 @@ struct GetInfoResult {
     uint256 numberOfEpochs;
     uint256 totalDistributionAmount;
     address creator;
-
-    EpochInfo[] epochs;
+    Share[] shares;
 }
 
 struct EpochInfo {
