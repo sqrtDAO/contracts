@@ -7,6 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {TokenV1, Allocation} from "./TokenV1.sol";
 import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
+import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
 import {MintParams} from "../external-interfaces/INonfungiblePositionManager.sol";
 import {INonfungiblePositionManager} from "../external-interfaces/INonfungiblePositionManager.sol";
 import {SharesLib, Share} from "src/utils/Shares.sol";
@@ -24,6 +25,7 @@ contract FactoryV1 is Ownable {
     address public protocolFeeReceiver;
 
     TransferToHook public immutable TRANSFER_TO_HOOK;
+    BuyAndBurnHookV3 public immutable BUY_AND_BURN_HOOK;
     INonfungiblePositionManager public immutable POSITION_MANAGER;
 
     uint24 public constant LIQUIDITY_POOL_FEE = 3000; // 0.3%
@@ -38,13 +40,17 @@ contract FactoryV1 is Ownable {
         address _initialOwner,
         uint256 _protocolFeeBps,
         address _protocolFeeReceiver,
+        address _uniswapSwapRouter,
         INonfungiblePositionManager _positionManager
     ) Ownable(_initialOwner) {
         protocolFeeBps = _protocolFeeBps;
         protocolFeeReceiver = _protocolFeeReceiver;
         POSITION_MANAGER = _positionManager;
         TRANSFER_TO_HOOK = new TransferToHook();
+        BUY_AND_BURN_HOOK = new BuyAndBurnHookV3(_uniswapSwapRouter);
     }
+
+    // --- sqrt governance ---
 
     function setProtocolFeeBps(uint256 _protocolFeeBps) public onlyOwner {
         protocolFeeBps = _protocolFeeBps;
@@ -54,10 +60,21 @@ contract FactoryV1 is Ownable {
         protocolFeeReceiver = _protocolFeeReceiver;
     }
 
+    // --- factory functions ---
+
+    function createToken(string memory _name, string memory _symbol, Allocation[] memory _allocations)
+        public
+        returns (address tokenAddress)
+    {
+        tokenAddress = address(new TokenV1(_name, _symbol, _allocations));
+        creatorOf[tokenAddress] = msg.sender;
+        emit NewToken(tokenAddress);
+    }
+
     /// @dev Make sure you give allowance to Factory contract before call this
-    /// allowance to both participation token (for initial participation) and distribution token to transfer totalDistributionAmount to distribution contract
+    /// allowance to distribution token to transfer totalDistributionAmount to distribution contract
     /// @notice for _config.shares, make sure it sums up to (100% - protocolFeeBps) because this function force injects protocol fee to _config.shares
-    function createDistributor(DistributorConfig memory _config) external returns (address distributorAddress) {
+    function createDistributor(DistributorConfig memory _config) public returns (address distributorAddress) {
         _injectProtocolFeeShare(_config);
         distributorAddress = address(new DistributorV1(msg.sender, _config));
 
@@ -107,20 +124,42 @@ contract FactoryV1 is Ownable {
         if (refund1 > 0) IERC20(token1).safeTransfer(msg.sender, refund1);
     }
 
-    function createToken(string memory _name, string memory _symbol, Allocation[] memory _allocations)
-        public
-        returns (address tokenAddress)
-    {
-        tokenAddress = address(new TokenV1(_name, _symbol, _allocations));
-        creatorOf[tokenAddress] = msg.sender;
-        emit NewToken(tokenAddress);
+    /// @dev this function does three things 1.token creating - 2.liquidity pool creation - 3.distribution creation
+    /// @notice _config.distributionToken will be overwrite by new created token just set it to address(0) or something
+    /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 set zero if you don't want to inject buyAndBurn make sure shares sum up to 100% after buyAndBurn injection
+    function createTokenAndLiquidityAndDistribution(
+        string memory _tokenName,
+        string memory _tokenSymbol,
+        Allocation[] memory _tokenAllocations,
+        uint160 _sqrtPriceX96,
+        uint256 _participationTokenAmountDesired,
+        uint256 _distributionTokenAmountDesired,
+        DistributorConfig memory _config,
+        uint256 _buyBackAndBurnShareBps
+    ) public returns (address tokenAddress, address distributorAddress) {
+        tokenAddress = createToken(_tokenName, _tokenSymbol, _tokenAllocations);
+        _config.distributionToken = tokenAddress;
+
+        createPoolAndAddLiquidity(
+            _config.participationToken,
+            tokenAddress,
+            _sqrtPriceX96,
+            _participationTokenAmountDesired,
+            _distributionTokenAmountDesired
+        );
+
+        // we need to do this here because caller doesn't know address of token
+        if (_buyBackAndBurnShareBps != 0) _injectBuyAndBurnShare(_config, _buyBackAndBurnShareBps);
+
+        distributorAddress = createDistributor(_config);
     }
 
-    /// utils
+    // --- Utility functions ---
+
     function _injectProtocolFeeShare(DistributorConfig memory _config) internal view {
         Share[] memory newShares = new Share[](_config.shares.length + 1);
 
-        for (uint256 i; i < _config.shares.length; ++i) {
+        for (uint256 i; i < _config.shares.length; i++) {
             newShares[i] = _config.shares[i];
         }
 
@@ -129,6 +168,25 @@ contract FactoryV1 is Ownable {
             hook: Hook({
                 contractAddress: address(TRANSFER_TO_HOOK),
                 callData: abi.encodeCall(TransferToHook.transferTo, (_config.distributionToken, protocolFeeReceiver))
+            })
+        });
+        _config.shares = newShares;
+    }
+
+    function _injectBuyAndBurnShare(DistributorConfig memory _config, uint256 _shareBps) internal view {
+        Share[] memory newShares = new Share[](_config.shares.length + 1);
+
+        bytes memory path = abi.encodePacked(_config.participationToken, LIQUIDITY_POOL_FEE, _config.distributionToken);
+
+        for (uint256 i; i < _config.shares.length; i++) {
+            newShares[i] = _config.shares[i];
+        }
+
+        newShares[_config.shares.length] = Share({
+            shareBps: _shareBps,
+            hook: Hook({
+                contractAddress: address(BUY_AND_BURN_HOOK),
+                callData: abi.encodeCall(BuyAndBurnHookV3.buyAndBurn, (path))
             })
         });
         _config.shares = newShares;
