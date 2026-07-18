@@ -80,7 +80,7 @@ contract DistributorV1Test is Test {
 
         assertEq(claimed, 100 ether);
         assertEq(distributionToken.balanceOf(participant), 100 ether);
-        assertEq(distributor.epochUserParticipation(0, participant), 0);
+        assertEq(distributor.epochUserClaimed(0, participant), true);
     }
 
     function testClaimRevertsUntilDelayExpires() public {
@@ -484,10 +484,12 @@ contract DistributorV1Test is Test {
 
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
+        assertEq(distributor.epochUserClaimed(0, participant), false);
         vm.prank(address(0xCAFE));
         distributor.claim(participant, Range({from: 0, length: 1}));
 
-        assertEq(distributor.epochUserParticipation(0, participant), 0);
+        assertEq(distributor.epochUserParticipation(0, participant), 10 ether);
+        assertEq(distributor.epochUserClaimed(0, participant), true);
     }
 
     function testClaimForRevertsWhenTooSoon() public {

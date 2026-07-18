@@ -44,8 +44,11 @@ contract DistributorV1 is ReentrancyGuard {
     // total amount users participated to an epoch
     mapping(uint256 => uint256) public epochTotalParticipation;
 
-    // amount user participated to an epoch (sets to zero on claim)
+    // amount user participated to an epoch (NOT sets to zero on claim)
     mapping(uint256 => mapping(address => uint256)) public epochUserParticipation;
+
+    // true if user already claimed the epoch
+    mapping(uint256 => mapping(address => bool)) public epochUserClaimed;
 
     // tracks which epochs have had their drain hook called
     uint256 public nextEpochToRelease = 0;
@@ -122,6 +125,7 @@ contract DistributorV1 is ReentrancyGuard {
             epochs[i] = EpochInfo({
                 userParticipationAmount: epochUserParticipation[epoch][user],
                 totalParticipationAmount: epochTotalParticipation[epoch],
+                claimed: epochUserClaimed[epoch][user],
                 rewardAmount: rewardOf(epoch)
             });
         }
@@ -149,7 +153,7 @@ contract DistributorV1 is ReentrancyGuard {
         uint256 i = _fromEpoch;
         while (i < maxEpoch) {
             // Check if user has claimable reward
-            if (epochUserParticipation[i][_user] > 0) {
+            if (epochUserParticipation[i][_user] > 0 && !epochUserClaimed[i][_user]) {
                 epochs[foundCount] = i;
                 foundCount++;
                 if (foundCount >= _maxFound) {
@@ -240,9 +244,9 @@ contract DistributorV1 is ReentrancyGuard {
         for (uint256 i = 0; i < _range.length; i++) {
             uint256 epoch = _range.from + i;
 
-            if (epochTotalParticipation[epoch] > 0) {
+            if (epochTotalParticipation[epoch] > 0 && !epochUserClaimed[epoch][_user]) {
                 claimAmount += (epochUserParticipation[epoch][_user] * rewardOf(epoch)) / epochTotalParticipation[epoch];
-                epochUserParticipation[epoch][_user] = 0;
+                epochUserClaimed[epoch][_user] = true;
             }
         }
 
@@ -359,6 +363,7 @@ struct EpochInfo {
 
     uint256 userParticipationAmount;
     uint256 totalParticipationAmount;
+    bool claimed;
 
     uint256 rewardAmount;
     // epochPassedTime can be calculated => (NOW - STARTING_TIMESTAMP) % EPOCH_DURATION
