@@ -74,12 +74,22 @@ contract FactoryV1 is Ownable {
     /// @dev Make sure you give allowance to Factory contract before call this
     /// allowance to distribution token to transfer totalDistributionAmount to distribution contract
     /// @notice for _config.shares, make sure it sums up to (100% - protocolFeeBps) because this function force injects protocol fee to _config.shares
-    function createDistributor(DistributorConfig memory _config) public returns (address distributorAddress) {
+    /// @param _pullIn somehow contract has distribution token and don't need to pull it from sender in this case set this flag to false
+    function createDistributor(DistributorConfig memory _config, bool _pullIn)
+        public
+        returns (address distributorAddress)
+    {
         _injectProtocolFeeShare(_config);
         distributorAddress = address(new DistributorV1(msg.sender, _config));
 
-        IERC20(_config.distributionToken)
-            .safeTransferFrom(msg.sender, distributorAddress, _config.totalDistributionAmount);
+        if (_pullIn) {
+            // sender pays the distribution token
+            IERC20(_config.distributionToken)
+                .safeTransferFrom(msg.sender, distributorAddress, _config.totalDistributionAmount);
+        } else {
+            // contract pays the distribution token
+            IERC20(_config.distributionToken).safeTransfer(distributorAddress, _config.totalDistributionAmount);
+        }
 
         distributorOf[distributorAddress] = msg.sender;
         emit NewDistributor(distributorAddress);
@@ -127,6 +137,7 @@ contract FactoryV1 is Ownable {
     /// @dev this function does three things 1.token creating - 2.liquidity pool creation - 3.distribution creation
     /// @notice _config.distributionToken will be overwrite by new created token just set it to address(0) or something
     /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 set zero if you don't want to inject buyAndBurn make sure shares sum up to 100% after buyAndBurn injection
+    /// @notice allocate token for Factory contract (this contract) as much as "totalDistributionAmount"
     function createTokenAndLiquidityAndDistribution(
         string memory _tokenName,
         string memory _tokenSymbol,
@@ -151,7 +162,8 @@ contract FactoryV1 is Ownable {
         // we need to do this here because caller doesn't know address of token
         if (_buyBackAndBurnShareBps != 0) _injectBuyAndBurnShare(_config, _buyBackAndBurnShareBps);
 
-        distributorAddress = createDistributor(_config);
+        // we don't need to pull-in tokens from user because factory contract has allocation as much as totalDistributionAmount
+        distributorAddress = createDistributor(_config, false);
     }
 
     // --- Utility functions ---

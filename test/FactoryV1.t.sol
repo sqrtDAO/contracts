@@ -77,7 +77,7 @@ contract FactoryV1Test is Test {
         distributionToken.approve(address(factory), type(uint256).max);
 
         vm.prank(user);
-        return factory.createDistributor(config);
+        return factory.createDistributor(config, true);
     }
 
     function testDynamicProtocolFeeUpdateFeeAndAddress() public {
