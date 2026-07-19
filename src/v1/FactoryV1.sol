@@ -97,29 +97,36 @@ contract FactoryV1 is Ownable {
 
     /// @dev caller must approve this contract to spend both tokens
     /// @dev LP tokens are sent to a dead address (burned)
+    /// @param _pullIn somehow contract has distribution token and don't need to pull it from sender in this case set this flag to false otherwise set to true so this function pulls in your distribution token as much as initial liquidity
     function createPoolAndAddLiquidity(
-        address token0,
-        address token1,
-        uint160 sqrtPriceX96,
-        uint256 amount0Desired,
-        uint256 amount1Desired
+        address _participationToken,
+        address _distributionToken,
+        uint160 _sqrtPriceX96,
+        uint256 _participationTokenAmountDesired,
+        uint256 _distributionTokenAmountDesired,
+        bool _pullIn
     ) public returns (address pool, uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
-        IERC20(token0).safeTransferFrom(msg.sender, address(this), amount0Desired);
-        IERC20(token1).safeTransferFrom(msg.sender, address(this), amount1Desired);
+        IERC20 participationToken = IERC20(_participationToken);
+        IERC20 distributionToken = IERC20(_distributionToken);
 
-        IERC20(token0).approve(address(POSITION_MANAGER), amount0Desired);
-        IERC20(token1).approve(address(POSITION_MANAGER), amount1Desired);
+        participationToken.safeTransferFrom(msg.sender, address(this), _participationTokenAmountDesired);
+        if (_pullIn) distributionToken.safeTransferFrom(msg.sender, address(this), _distributionTokenAmountDesired);
 
-        pool = POSITION_MANAGER.createAndInitializePoolIfNecessary(token0, token1, LIQUIDITY_POOL_FEE, sqrtPriceX96);
+        participationToken.approve(address(POSITION_MANAGER), _participationTokenAmountDesired);
+        distributionToken.approve(address(POSITION_MANAGER), _distributionTokenAmountDesired);
+
+        pool = POSITION_MANAGER.createAndInitializePoolIfNecessary(
+            _participationToken, _distributionToken, LIQUIDITY_POOL_FEE, _sqrtPriceX96
+        );
 
         MintParams memory params = MintParams({
-            token0: token0,
-            token1: token1,
+            token0: _participationToken,
+            token1: _distributionToken,
             fee: LIQUIDITY_POOL_FEE,
             tickLower: -887272, // we don't care we are burning LP tokens
             tickUpper: 887272, // we don't care we are burning LP tokens
-            amount0Desired: amount0Desired,
-            amount1Desired: amount1Desired,
+            amount0Desired: _participationTokenAmountDesired,
+            amount1Desired: _distributionTokenAmountDesired,
             amount0Min: 0, // we don't care we are burning LP tokens
             amount1Min: 0, // we don't care we are burning LP tokens
             recipient: 0x000000000000000000000000000000000000dEaD, // burning LP tokens
@@ -128,16 +135,16 @@ contract FactoryV1 is Ownable {
 
         (tokenId, liquidity, amount0, amount1) = POSITION_MANAGER.mint(params);
 
-        uint256 refund0 = amount0Desired - amount0;
-        if (refund0 > 0) IERC20(token0).safeTransfer(msg.sender, refund0);
-        uint256 refund1 = amount1Desired - amount1;
-        if (refund1 > 0) IERC20(token1).safeTransfer(msg.sender, refund1);
+        uint256 refund0 = _participationTokenAmountDesired - amount0;
+        if (refund0 > 0) participationToken.safeTransfer(msg.sender, refund0);
+        uint256 refund1 = _distributionTokenAmountDesired - amount1;
+        if (refund1 > 0) distributionToken.safeTransfer(msg.sender, refund1);
     }
 
     /// @dev this function does three things 1.token creating - 2.liquidity pool creation - 3.distribution creation
     /// @notice _config.distributionToken will be overwrite by new created token just set it to address(0) or something
     /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 set zero if you don't want to inject buyAndBurn make sure shares sum up to 100% after buyAndBurn injection
-    /// @notice allocate token for Factory contract (this contract) as much as "totalDistributionAmount"
+    /// @notice allocate token for Factory contract (this contract) as much as totalDistributionAmount + _distributionTokenAmountDesired
     function createTokenAndLiquidityAndDistribution(
         string memory _tokenName,
         string memory _tokenSymbol,
@@ -156,7 +163,8 @@ contract FactoryV1 is Ownable {
             tokenAddress,
             _sqrtPriceX96,
             _participationTokenAmountDesired,
-            _distributionTokenAmountDesired
+            _distributionTokenAmountDesired,
+            false
         );
 
         // we need to do this here because caller doesn't know address of token
