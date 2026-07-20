@@ -13,6 +13,8 @@ import {Share} from "src/utils/Shares.sol";
 import {Hook} from "src/utils/Hook.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
+import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
 
 contract FactoryV1LiquidityTest is Test {
     FactoryV1 public factory;
@@ -44,7 +46,8 @@ contract FactoryV1LiquidityTest is Test {
             owner,
             0, // protocolFeeBps = 0 for simpler share math
             protocolFeeReceiver,
-            address(0x0),
+            new TransferToHook(),
+            new BuyAndBurnHookV3(address(0x0)),
             INonfungiblePositionManager(address(mockPositionManager)),
             IPermit2(address(mockPermit2))
         );

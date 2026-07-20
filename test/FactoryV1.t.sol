@@ -11,6 +11,8 @@ import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.
 import {Share} from "src/utils/Shares.sol";
 import {Hook} from "src/utils/Hook.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
+import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
 
 contract FactoryV1Test is Test {
     FactoryV1 public factory;
@@ -36,7 +38,15 @@ contract FactoryV1Test is Test {
         distributionToken.mint(address(this), 1_000 ether);
         participationToken.mint(user, 1_000 ether);
 
-        factory = new FactoryV1(owner, 0, protocolFeeReceiver, address(0x0), INonfungiblePositionManager(address(0x1)), IPermit2(address(0x2)));
+        factory = new FactoryV1(
+            owner,
+            0,
+            protocolFeeReceiver,
+            new TransferToHook(),
+            new BuyAndBurnHookV3(address(0x0)),
+            INonfungiblePositionManager(address(0x1)),
+            IPermit2(address(0x2))
+        );
     }
 
     function _createDistributor(uint256 feeBps, address feeReceiver, uint256 participationAmount)

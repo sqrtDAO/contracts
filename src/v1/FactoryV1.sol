@@ -42,7 +42,8 @@ contract FactoryV1 is Ownable {
         address _initialOwner,
         uint256 _protocolFeeBps,
         address _protocolFeeReceiver,
-        address _uniswapSwapRouter,
+        TransferToHook _transferToHook,
+        BuyAndBurnHookV3 _buyAndBurnHookV3,
         INonfungiblePositionManager _positionManager,
         IPermit2 _permit2
     ) Ownable(_initialOwner) {
@@ -50,8 +51,8 @@ contract FactoryV1 is Ownable {
         protocolFeeReceiver = _protocolFeeReceiver;
         POSITION_MANAGER = _positionManager;
         PERMIT2 = _permit2;
-        TRANSFER_TO_HOOK = new TransferToHook();
-        BUY_AND_BURN_HOOK = new BuyAndBurnHookV3(_uniswapSwapRouter);
+        TRANSFER_TO_HOOK = _transferToHook;
+        BUY_AND_BURN_HOOK = _buyAndBurnHookV3;
     }
 
     // --- sqrt governance ---
