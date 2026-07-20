@@ -50,6 +50,13 @@ contract DistributorV1 is ReentrancyGuard {
     // true if user already claimed the epoch
     mapping(uint256 => mapping(address => bool)) public epochUserClaimed;
 
+    // number of unique participants that joined an epoch
+    mapping(uint256 => uint256) public epochUniqueParticipants;
+    // total number of unique participants that ever joined any epoch
+    uint256 public totalUniqueParticipants;
+    // tracks addresses that have ever participated (keyed by recipient)
+    mapping(address => bool) private _hasParticipated;
+
     // tracks which epochs have had their drain hook called
     uint256 public nextEpochToRelease = 0;
 
@@ -108,7 +115,8 @@ contract DistributorV1 is ReentrancyGuard {
             numberOfEpochs: NUMBER_OF_EPOCHS,
             totalDistributionAmount: TOTAL_DISTRIBUTION_AMOUNT,
             creator: CREATOR,
-            shares: shares
+            shares: shares,
+            totalUniqueParticipants: totalUniqueParticipants
         });
     }
 
@@ -125,6 +133,7 @@ contract DistributorV1 is ReentrancyGuard {
             epochs[i] = EpochInfo({
                 userParticipationAmount: epochUserParticipation[epoch][user],
                 totalParticipationAmount: epochTotalParticipation[epoch],
+                uniqueParticipants: epochUniqueParticipants[epoch],
                 claimed: epochUserClaimed[epoch][user],
                 rewardAmount: rewardOf(epoch)
             });
@@ -200,9 +209,19 @@ contract DistributorV1 is ReentrancyGuard {
         }
 
         for (uint256 i = 0; i < _range.length; i++) {
-            epochTotalParticipation[_range.from + i] += _amountPerEpoch;
-            epochUserParticipation[_range.from + i][_recipient] += _amountPerEpoch;
+            uint256 epoch = _range.from + i;
+            if (epochUserParticipation[epoch][_recipient] == 0) {
+                epochUniqueParticipants[epoch]++;
+            }
+            epochTotalParticipation[epoch] += _amountPerEpoch;
+            epochUserParticipation[epoch][_recipient] += _amountPerEpoch;
         }
+
+        if (!_hasParticipated[_recipient]) {
+            _hasParticipated[_recipient] = true;
+            totalUniqueParticipants++;
+        }
+
         emit Participated(msg.sender, _recipient, _range.from, _range.length, _amountPerEpoch);
     }
 
@@ -356,6 +375,8 @@ struct GetContractInfoResult {
     uint256 totalDistributionAmount;
     address creator;
     Share[] shares;
+
+    uint256 totalUniqueParticipants;
 }
 
 struct EpochInfo {
@@ -363,6 +384,7 @@ struct EpochInfo {
 
     uint256 userParticipationAmount;
     uint256 totalParticipationAmount;
+    uint256 uniqueParticipants;
     bool claimed;
 
     uint256 rewardAmount;
