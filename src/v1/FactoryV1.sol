@@ -12,6 +12,7 @@ import {MintParams} from "../external-interfaces/INonfungiblePositionManager.sol
 import {INonfungiblePositionManager} from "../external-interfaces/INonfungiblePositionManager.sol";
 import {SharesLib, Share} from "src/utils/Shares.sol";
 import {Hook} from "src/utils/Hook.sol";
+import {IPermit2} from "../external-interfaces/IPermit2.sol";
 
 contract FactoryV1 is Ownable {
     using SafeERC20 for IERC20;
@@ -27,6 +28,7 @@ contract FactoryV1 is Ownable {
     TransferToHook public immutable TRANSFER_TO_HOOK;
     BuyAndBurnHookV3 public immutable BUY_AND_BURN_HOOK;
     INonfungiblePositionManager public immutable POSITION_MANAGER;
+    IPermit2 public immutable PERMIT2;
 
     uint24 public constant LIQUIDITY_POOL_FEE = 3000; // 0.3%
 
@@ -41,11 +43,13 @@ contract FactoryV1 is Ownable {
         uint256 _protocolFeeBps,
         address _protocolFeeReceiver,
         address _uniswapSwapRouter,
-        INonfungiblePositionManager _positionManager
+        INonfungiblePositionManager _positionManager,
+        IPermit2 _permit2
     ) Ownable(_initialOwner) {
         protocolFeeBps = _protocolFeeBps;
         protocolFeeReceiver = _protocolFeeReceiver;
         POSITION_MANAGER = _positionManager;
+        PERMIT2 = _permit2;
         TRANSFER_TO_HOOK = new TransferToHook();
         BUY_AND_BURN_HOOK = new BuyAndBurnHookV3(_uniswapSwapRouter);
     }
@@ -95,22 +99,50 @@ contract FactoryV1 is Ownable {
         emit NewDistributor(distributorAddress);
     }
 
-    /// @dev caller must approve this contract to spend both tokens
     /// @dev LP tokens are sent to a dead address (burned)
-    /// @param _pullIn somehow contract has distribution token and don't need to pull it from sender in this case set this flag to false otherwise set to true so this function pulls in your distribution token as much as initial liquidity
+    /// @param _pullIn if false, distribution token is not pulled (factory already has it)
+    /// @param _participationPermit2 empty signature (= no permit2) falls back to allowance-based safeTransferFrom
+    /// @param _distributionPermit2 empty signature (= no permit2) falls back to allowance-based safeTransferFrom
     function createPoolAndAddLiquidity(
         address _participationToken,
         address _distributionToken,
         uint160 _sqrtPriceX96,
         uint256 _participationTokenAmountDesired,
         uint256 _distributionTokenAmountDesired,
-        bool _pullIn
+        bool _pullIn,
+        Permit2Data memory _participationPermit2,
+        Permit2Data memory _distributionPermit2
     ) public returns (address pool, uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
         IERC20 participationToken = IERC20(_participationToken);
         IERC20 distributionToken = IERC20(_distributionToken);
 
-        participationToken.safeTransferFrom(msg.sender, address(this), _participationTokenAmountDesired);
-        if (_pullIn) distributionToken.safeTransferFrom(msg.sender, address(this), _distributionTokenAmountDesired);
+        if (_participationPermit2.signature.length > 0) {
+            PERMIT2.permitTransferFrom(
+                _participationPermit2.permit,
+                IPermit2.SignatureTransferDetails({
+                    to: address(this), requestedAmount: _participationTokenAmountDesired
+                }),
+                msg.sender,
+                _participationPermit2.signature
+            );
+        } else {
+            participationToken.safeTransferFrom(msg.sender, address(this), _participationTokenAmountDesired);
+        }
+
+        if (_pullIn) {
+            if (_distributionPermit2.signature.length > 0) {
+                PERMIT2.permitTransferFrom(
+                    _distributionPermit2.permit,
+                    IPermit2.SignatureTransferDetails({
+                        to: address(this), requestedAmount: _distributionTokenAmountDesired
+                    }),
+                    msg.sender,
+                    _distributionPermit2.signature
+                );
+            } else {
+                distributionToken.safeTransferFrom(msg.sender, address(this), _distributionTokenAmountDesired);
+            }
+        }
 
         participationToken.approve(address(POSITION_MANAGER), _participationTokenAmountDesired);
         distributionToken.approve(address(POSITION_MANAGER), _distributionTokenAmountDesired);
@@ -123,12 +155,12 @@ contract FactoryV1 is Ownable {
             token0: _participationToken,
             token1: _distributionToken,
             fee: LIQUIDITY_POOL_FEE,
-            tickLower: -887272, // we don't care we are burning LP tokens
-            tickUpper: 887272, // we don't care we are burning LP tokens
+            tickLower: -887272,
+            tickUpper: 887272,
             amount0Desired: _participationTokenAmountDesired,
             amount1Desired: _distributionTokenAmountDesired,
-            amount0Min: 0, // we don't care we are burning LP tokens
-            amount1Min: 0, // we don't care we are burning LP tokens
+            amount0Min: 0,
+            amount1Min: 0,
             recipient: 0x000000000000000000000000000000000000dEaD, // burning LP tokens
             deadline: type(uint256).max
         });
@@ -153,7 +185,8 @@ contract FactoryV1 is Ownable {
         uint256 _participationTokenAmountDesired,
         uint256 _distributionTokenAmountDesired,
         DistributorConfig memory _config,
-        uint256 _buyBackAndBurnShareBps
+        uint256 _buyBackAndBurnShareBps,
+        Permit2Data calldata _participationPermit2
     ) public returns (address tokenAddress, address distributorAddress) {
         tokenAddress = createToken(_tokenName, _tokenSymbol, _tokenAllocations);
         _config.distributionToken = tokenAddress;
@@ -164,7 +197,9 @@ contract FactoryV1 is Ownable {
             _sqrtPriceX96,
             _participationTokenAmountDesired,
             _distributionTokenAmountDesired,
-            false
+            false,
+            _participationPermit2,
+            _emptyPermit2()
         );
 
         // we need to do this here because caller doesn't know address of token
@@ -211,4 +246,18 @@ contract FactoryV1 is Ownable {
         });
         _config.shares = newShares;
     }
+
+    function _emptyPermit2() internal pure returns (Permit2Data memory) {
+        return Permit2Data({
+            permit: IPermit2.PermitTransferFrom({
+                permitted: IPermit2.TokenPermissions({token: address(0), amount: 0}), nonce: 0, deadline: 0
+            }),
+            signature: ""
+        });
+    }
+}
+
+struct Permit2Data {
+    IPermit2.PermitTransferFrom permit;
+    bytes signature;
 }

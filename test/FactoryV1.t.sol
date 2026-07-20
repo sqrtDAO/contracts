@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import {Test} from "forge-std/Test.sol";
 import {FactoryV1} from "../src/v1/FactoryV1.sol";
 import {INonfungiblePositionManager} from "../src/external-interfaces/INonfungiblePositionManager.sol";
+import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
 import {DistributorV1, DistributorConfig} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
@@ -35,7 +36,7 @@ contract FactoryV1Test is Test {
         distributionToken.mint(address(this), 1_000 ether);
         participationToken.mint(user, 1_000 ether);
 
-        factory = new FactoryV1(owner, 0, protocolFeeReceiver, address(0x0), INonfungiblePositionManager(address(0x1)));
+        factory = new FactoryV1(owner, 0, protocolFeeReceiver, address(0x0), INonfungiblePositionManager(address(0x1)), IPermit2(address(0x2)));
     }
 
     function _createDistributor(uint256 feeBps, address feeReceiver, uint256 participationAmount)
