@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {Script} from "forge-std/Script.sol";
+import {Script, console} from "forge-std/Script.sol";
 import {FactoryV1} from "../src/v1/FactoryV1.sol";
 import {TransferToHook} from "../src/utils/hooks/TransferToHook.sol";
 import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
@@ -9,6 +9,9 @@ import {INonfungiblePositionManager, MintParams} from "../src/external-interface
 import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
 import {IUniswapV3SwapRouter, ExactInputParams} from "../src/external-interfaces/IUniswapV3SwapRouter.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {FixedEmission} from "../src/utils/emission-function/FixedEmission.sol";
+import {LinearEmission} from "../src/utils/emission-function/LinearEmission.sol";
+import {ExponentialEmission} from "../src/utils/emission-function/ExponentialEmission.sol";
 
 contract FactoryV1LocalScript is Script {
     function run() external returns (FactoryV1 factory) {
@@ -16,19 +19,41 @@ contract FactoryV1LocalScript is Script {
             vm.envOr("PRIVATE_KEY", uint256(0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80));
         vm.startBroadcast(pk);
 
+        // EmissionFunctions
+        FixedEmission fixedEmission = new FixedEmission();
+        LinearEmission linearEmission = new LinearEmission();
+        ExponentialEmission exponentialEmission = new ExponentialEmission();
+
+        // Mock
         MockPermit2 permit2 = new MockPermit2();
         MockPositionManager positionManager = new MockPositionManager();
         MockSwapRouter swapRouter = new MockSwapRouter();
+
+        // Hooks
+        TransferToHook transferToHook = new TransferToHook();
+        BuyAndBurnHookV3 buyAndBurnHook = new BuyAndBurnHookV3(address(swapRouter));
 
         factory = new FactoryV1(
             msg.sender,
             0,
             msg.sender,
-            new TransferToHook(),
-            new BuyAndBurnHookV3(address(swapRouter)),
+            transferToHook,
+            buyAndBurnHook,
             INonfungiblePositionManager(address(positionManager)),
             IPermit2(address(permit2))
         );
+
+        console.log("fixedEmission", address(fixedEmission));
+        console.log("linearEmission", address(linearEmission));
+        console.log("exponentialEmission", address(exponentialEmission));
+        console.log("transferToHook", address(transferToHook));
+        console.log("buyAndBurnHook", address(buyAndBurnHook));
+
+        console.log("permit2", address(permit2));
+        console.log("positionManager", address(positionManager));
+        console.log("swapRouter", address(swapRouter));
+
+        console.log("factoryV1", address(factory));
 
         vm.stopBroadcast();
     }
