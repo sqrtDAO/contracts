@@ -12,6 +12,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {FixedEmission} from "../src/utils/emission-function/FixedEmission.sol";
 import {LinearEmission} from "../src/utils/emission-function/LinearEmission.sol";
 import {ExponentialEmission} from "../src/utils/emission-function/ExponentialEmission.sol";
+import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
 
 contract FactoryV1LocalScript is Script {
     function run() external returns (FactoryV1 factory) {
@@ -35,13 +36,20 @@ contract FactoryV1LocalScript is Script {
 
         factory = new FactoryV1(
             msg.sender,
-            0,
+            400, // 4%
             msg.sender,
             transferToHook,
             buyAndBurnHook,
             INonfungiblePositionManager(address(positionManager)),
             IPermit2(address(permit2))
         );
+
+        // fake token to use as participation token
+        Allocation[] memory allocation = new Allocation[](1);
+        allocation[0] = Allocation({recipient: address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266), amount: 1000 ether});
+        TokenV1 fakeUSD = new TokenV1("Fake USD", "FUSD", allocation);
+
+        console.log("fakeUSD", address(fakeUSD));
 
         console.log("fixedEmission", address(fixedEmission));
         console.log("linearEmission", address(linearEmission));
