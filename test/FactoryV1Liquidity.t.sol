@@ -25,7 +25,6 @@ contract FactoryV1LiquidityTest is Test {
     FixedEmission public emission;
 
     address public owner = address(0xCAFE);
-    address public protocolFeeReceiver = address(0xBEEF);
     address public user = address(0x1234);
 
     uint256 public epochDuration = 100;
@@ -45,7 +44,6 @@ contract FactoryV1LiquidityTest is Test {
         factory = new FactoryV1(
             owner,
             0, // protocolFeeBps = 0 for simpler share math
-            protocolFeeReceiver,
             new TransferToHook(),
             new BuyAndBurnHookV3(address(0x0)),
             INonfungiblePositionManager(address(mockPositionManager)),

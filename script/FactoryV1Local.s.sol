@@ -37,7 +37,6 @@ contract FactoryV1LocalScript is Script {
         factory = new FactoryV1(
             msg.sender,
             400, // 4%
-            msg.sender,
             transferToHook,
             buyAndBurnHook,
             INonfungiblePositionManager(address(positionManager)),

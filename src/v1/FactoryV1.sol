@@ -23,7 +23,6 @@ contract FactoryV1 is Ownable {
     event NewToken(address indexed tokenAddress);
 
     uint256 public protocolFeeBps;
-    address public protocolFeeReceiver;
 
     TransferToHook public immutable TRANSFER_TO_HOOK;
     BuyAndBurnHookV3 public immutable BUY_AND_BURN_HOOK;
@@ -41,14 +40,12 @@ contract FactoryV1 is Ownable {
     constructor(
         address _initialOwner,
         uint256 _protocolFeeBps,
-        address _protocolFeeReceiver,
         TransferToHook _transferToHook,
         BuyAndBurnHookV3 _buyAndBurnHookV3,
         INonfungiblePositionManager _positionManager,
         IPermit2 _permit2
     ) Ownable(_initialOwner) {
         protocolFeeBps = _protocolFeeBps;
-        protocolFeeReceiver = _protocolFeeReceiver;
         POSITION_MANAGER = _positionManager;
         PERMIT2 = _permit2;
         TRANSFER_TO_HOOK = _transferToHook;
@@ -61,8 +58,9 @@ contract FactoryV1 is Ownable {
         protocolFeeBps = _protocolFeeBps;
     }
 
-    function setProtocolFeeReceiver(address _protocolFeeReceiver) public onlyOwner {
-        protocolFeeReceiver = _protocolFeeReceiver;
+    function drain(address _token, address _to) public onlyOwner {
+        uint256 balance = IERC20(_token).balanceOf(address(this));
+        IERC20(_token).safeTransfer(_to, balance);
     }
 
     // --- factory functions ---
@@ -223,7 +221,7 @@ contract FactoryV1 is Ownable {
             shareBps: protocolFeeBps,
             hook: Hook({
                 contractAddress: address(TRANSFER_TO_HOOK),
-                callData: abi.encodeCall(TransferToHook.transferTo, (_config.distributionToken, protocolFeeReceiver))
+                callData: abi.encodeCall(TransferToHook.transferTo, (_config.distributionToken, address(this)))
             })
         });
         _config.shares = newShares;

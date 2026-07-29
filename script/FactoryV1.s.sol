@@ -16,7 +16,6 @@ contract FactoryV1Script is Script {
         // --- config (override via env vars) ---
         address initialOwner = vm.envOr("INITIAL_OWNER", msg.sender);
         uint256 protocolFeeBps = vm.envOr("PROTOCOL_FEE_BPS", uint256(500)); // 5%
-        address protocolFeeReceiver = vm.envOr("PROTOCOL_FEE_RECEIVER", msg.sender);
 
         // chain-specific external addresses (Uniswap V3 on the target chain)
         address positionManager = vm.envAddress("POSITION_MANAGER");
@@ -38,7 +37,6 @@ contract FactoryV1Script is Script {
         factory = new FactoryV1(
             initialOwner,
             protocolFeeBps,
-            protocolFeeReceiver,
             transferToHook,
             buyAndBurnHook,
             INonfungiblePositionManager(positionManager),

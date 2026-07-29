@@ -21,7 +21,6 @@ contract FactoryV1Test is Test {
     FixedEmission public emission;
 
     address public owner = address(0xCAFE);
-    address public protocolFeeReceiver = address(0xBEEF);
     address public user = address(0x1234);
 
     uint256 public epochDuration = 100;
@@ -41,7 +40,6 @@ contract FactoryV1Test is Test {
         factory = new FactoryV1(
             owner,
             0,
-            protocolFeeReceiver,
             new TransferToHook(),
             new BuyAndBurnHookV3(address(0x0)),
             INonfungiblePositionManager(address(0x1)),
@@ -49,14 +47,12 @@ contract FactoryV1Test is Test {
         );
     }
 
-    function _createDistributor(uint256 feeBps, address feeReceiver, uint256 participationAmount)
+    function _createDistributor(uint256 feeBps, uint256 participationAmount)
         internal
         returns (address)
     {
         vm.prank(owner);
         factory.setProtocolFeeBps(feeBps);
-        vm.prank(owner);
-        factory.setProtocolFeeReceiver(feeReceiver);
 
         // user shares must sum to (10000 - feeBps) — factory injects the protocol fee share
         Share[] memory shares = new Share[](1);
@@ -92,7 +88,7 @@ contract FactoryV1Test is Test {
     }
 
     function testDynamicProtocolFeeUpdateFeeAndAddress() public {
-        address distributorAddr1 = _createDistributor(20, address(0xAAAA), 10 ether);
+        address distributorAddr1 = _createDistributor(20, 10 ether);
         DistributorV1 distributor1 = DistributorV1(distributorAddr1);
 
         // Protocol fee share is the last injected share (index 1)
@@ -105,7 +101,7 @@ contract FactoryV1Test is Test {
         assertEq(userBps, 9980);
 
         // this line updates factory settings
-        address distributorAddr2 = _createDistributor(50, address(0xBBBB), 10 ether);
+        address distributorAddr2 = _createDistributor(50, 10 ether);
         DistributorV1 distributor2 = DistributorV1(distributorAddr2);
 
         // First distributor unchanged
@@ -128,9 +124,25 @@ contract FactoryV1Test is Test {
         factory.setProtocolFeeBps(99);
     }
 
-    function testRevertNonOwnerUpdatesProtocolFeeReceiver() public {
+    function testDrainTokens() public {
+        // mint some tokens to factory
+        ERC20Mock token = new ERC20Mock();
+        token.mint(address(factory), 500 ether);
+
+        address recipient = address(0xFACE);
+        vm.prank(owner);
+        factory.drain(address(token), recipient);
+
+        assertEq(token.balanceOf(address(factory)), 0);
+        assertEq(token.balanceOf(recipient), 500 ether);
+    }
+
+    function testRevertDrainNonOwner() public {
+        ERC20Mock token = new ERC20Mock();
+        token.mint(address(factory), 500 ether);
+
         vm.prank(address(0xDEAD));
         vm.expectRevert();
-        factory.setProtocolFeeReceiver(address(0xDEAD));
+        factory.drain(address(token), address(0xDEAD));
     }
 }
