@@ -143,21 +143,26 @@ contract FactoryV1 is Ownable {
             }
         }
 
-        participationToken.approve(address(POSITION_MANAGER), _participationTokenAmountDesired);
-        distributionToken.approve(address(POSITION_MANAGER), _distributionTokenAmountDesired);
+        (address token0, address token1, uint256 amount0Desired, uint256 amount1Desired) =
+            _participationToken < _distributionToken
+                ? (_participationToken, _distributionToken, _participationTokenAmountDesired, _distributionTokenAmountDesired)
+                : (_distributionToken, _participationToken, _distributionTokenAmountDesired, _participationTokenAmountDesired);
+
+        IERC20(token0).approve(address(POSITION_MANAGER), amount0Desired);
+        IERC20(token1).approve(address(POSITION_MANAGER), amount1Desired);
 
         pool = POSITION_MANAGER.createAndInitializePoolIfNecessary(
-            _participationToken, _distributionToken, LIQUIDITY_POOL_FEE, _sqrtPriceX96
+            token0, token1, LIQUIDITY_POOL_FEE, _sqrtPriceX96
         );
 
         MintParams memory params = MintParams({
-            token0: _participationToken,
-            token1: _distributionToken,
+            token0: token0,
+            token1: token1,
             fee: LIQUIDITY_POOL_FEE,
             tickLower: -887272,
             tickUpper: 887272,
-            amount0Desired: _participationTokenAmountDesired,
-            amount1Desired: _distributionTokenAmountDesired,
+            amount0Desired: amount0Desired,
+            amount1Desired: amount1Desired,
             amount0Min: 0,
             amount1Min: 0,
             recipient: 0x000000000000000000000000000000000000dEaD, // burning LP tokens
