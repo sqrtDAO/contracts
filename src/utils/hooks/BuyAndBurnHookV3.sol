@@ -20,7 +20,7 @@ contract BuyAndBurnHookV3 {
         IERC20 token = IERC20(_decodeFirstToken(_path));
 
         uint256 amountIn = token.allowance(msg.sender, address(this));
-        require(amountIn > 0, "Allowance is zero");
+        if (amountIn == 0) return 0;
 
         token.safeTransferFrom(msg.sender, address(this), amountIn);
 

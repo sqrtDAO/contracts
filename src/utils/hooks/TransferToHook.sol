@@ -20,7 +20,7 @@ contract TransferToHook {
         IERC20 token = IERC20(_token);
 
         uint256 amount = token.allowance(sender, address(this));
-        require(amount > 0, "No participation tokens to swap");
+        if (amount == 0) return;
 
         require(token.transferFrom(sender, _to, amount), "transferFrom failed");
 

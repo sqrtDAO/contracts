@@ -21,6 +21,7 @@ contract SplitterHook {
         IERC20 token = IERC20(_token);
 
         uint256 amountIn = IERC20(_token).allowance(msg.sender, address(this));
+        if (amountIn == 0) return;
         token.safeTransferFrom(msg.sender, address(this), amountIn);
 
         for (uint256 i = 0; i < _shares.length; i++) {
