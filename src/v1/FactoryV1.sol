@@ -171,10 +171,10 @@ contract FactoryV1 is Ownable {
 
         (tokenId, liquidity, amount0, amount1) = POSITION_MANAGER.mint(params);
 
-        uint256 refund0 = _participationTokenAmountDesired - amount0;
-        if (refund0 > 0) participationToken.safeTransfer(msg.sender, refund0);
-        uint256 refund1 = _distributionTokenAmountDesired - amount1;
-        if (refund1 > 0) distributionToken.safeTransfer(msg.sender, refund1);
+        uint256 refund0 = amount0Desired - amount0;
+        if (refund0 > 0) IERC20(token0).safeTransfer(msg.sender, refund0);
+        uint256 refund1 = amount1Desired - amount1;
+        if (refund1 > 0) IERC20(token1).safeTransfer(msg.sender, refund1);
     }
 
     /// @dev this function does three things 1.token creating - 2.liquidity pool creation - 3.distribution creation
