@@ -1,3 +1,7 @@
+# sepolia
+#	SWAP_ROUTER=0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E
+#	PERMIT2=0x000000000022D473030F116dDEE9F6B43aC78BA3
+#	POSITION_MANAGER=0x1238536071E1c677A632429e3655c799b22cDA52
 
 deploy-local:
 	forge script script/FactoryV1Local.s.sol:FactoryV1LocalScript \
@@ -17,4 +21,5 @@ new-token-sepolia:
   		"Root" "ROOT" \
   		"[(0x068842FCf7D6EB04255fe8BeB7224C0FE0506b92,100000000000000000000000000)]" \
   		--rpc-url $(RPC_URL) \
+		--etherscan-api-key $(ETHERSCAN_API_KEY) \
   		--private-key $(PRIVATE_KEY)
