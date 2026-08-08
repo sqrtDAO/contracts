@@ -36,7 +36,7 @@ contract BuyAndBurnHookV3 {
 
     function _decodeFirstToken(bytes calldata _path) private pure returns (address tokenIn) {
         assembly {
-            tokenIn := calldataload(_path.offset)
+            tokenIn := shr(96, calldataload(_path.offset))
         }
     }
 }
