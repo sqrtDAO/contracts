@@ -47,10 +47,7 @@ contract FactoryV1Test is Test {
         );
     }
 
-    function _createDistributor(uint256 feeBps, uint256 participationAmount)
-        internal
-        returns (address)
-    {
+    function _createDistributor(uint256 feeBps, uint256 participationAmount) internal returns (address) {
         vm.prank(owner);
         factory.setProtocolFeeBps(feeBps);
 
