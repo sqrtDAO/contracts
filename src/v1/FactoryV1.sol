@@ -224,39 +224,31 @@ contract FactoryV1 is Ownable {
     // --- Utility functions ---
 
     function _injectProtocolFeeShare(DistributorConfig memory _config) internal view {
-        Share[] memory newShares = new Share[](_config.shares.length + 1);
-
-        for (uint256 i; i < _config.shares.length; i++) {
-            newShares[i] = _config.shares[i];
-        }
-
-        newShares[_config.shares.length] = Share({
-            shareBps: protocolFeeBps,
-            hook: Hook({
-                contractAddress: address(TRANSFER_TO_HOOK),
-                callData: abi.encodeCall(TransferToHook.transferTo, (_config.participationToken, address(this)))
+        _config.shares = SharesLib.append(
+            _config.shares,
+            Share({
+                shareBps: protocolFeeBps,
+                hook: Hook({
+                    contractAddress: address(TRANSFER_TO_HOOK),
+                    callData: abi.encodeCall(TransferToHook.transferTo, (_config.participationToken, address(this)))
+                })
             })
-        });
-        _config.shares = newShares;
+        );
     }
 
     function _injectBuyAndBurnShare(DistributorConfig memory _config, uint256 _shareBps) internal view {
-        Share[] memory newShares = new Share[](_config.shares.length + 1);
-
         bytes memory path = abi.encodePacked(_config.participationToken, LIQUIDITY_POOL_FEE, _config.distributionToken);
 
-        for (uint256 i; i < _config.shares.length; i++) {
-            newShares[i] = _config.shares[i];
-        }
-
-        newShares[_config.shares.length] = Share({
-            shareBps: _shareBps,
-            hook: Hook({
-                contractAddress: address(BUY_AND_BURN_HOOK),
-                callData: abi.encodeCall(BuyAndBurnHookV3.buyAndBurn, (path))
+        _config.shares = SharesLib.append(
+            _config.shares,
+            Share({
+                shareBps: _shareBps,
+                hook: Hook({
+                    contractAddress: address(BUY_AND_BURN_HOOK),
+                    callData: abi.encodeCall(BuyAndBurnHookV3.buyAndBurn, (path))
+                })
             })
-        });
-        _config.shares = newShares;
+        );
     }
 
     function _emptyPermit2() internal pure returns (Permit2Data memory) {

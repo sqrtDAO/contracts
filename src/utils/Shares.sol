@@ -36,6 +36,15 @@ library SharesLib {
         asset.approve(share.hook.contractAddress, 0);
     }
 
+    function append(Share[] memory shares, Share memory toAdd) internal pure returns (Share[] memory) {
+        Share[] memory newShares = new Share[](shares.length + 1);
+        for (uint256 i; i < shares.length; ++i) {
+            newShares[i] = shares[i];
+        }
+        newShares[shares.length] = toAdd;
+        return newShares;
+    }
+
     function approveAndTryCall(Share memory share, IERC20 asset, uint256 totalAmount) internal {
         uint256 amount = shareOf(share, totalAmount);
         asset.approve(share.hook.contractAddress, amount);
