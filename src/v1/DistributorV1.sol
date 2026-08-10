@@ -52,6 +52,7 @@ contract DistributorV1 is ReentrancyGuard {
 
     // number of unique participants that joined an epoch
     mapping(uint256 => uint256) public epochUniqueParticipants;
+
     // total number of unique participants that ever joined any epoch
     uint256 public totalUniqueParticipants;
     // tracks addresses that have ever participated (keyed by recipient)
@@ -59,6 +60,8 @@ contract DistributorV1 is ReentrancyGuard {
 
     // tracks which epochs have had their drain hook called
     uint256 public nextEpochToRelease = 0;
+
+    uint256 public totalParticipation = 0;
 
     mapping(address => uint256) public claimFeeBps;
 
@@ -111,6 +114,7 @@ contract DistributorV1 is ReentrancyGuard {
             startingTimestamp: STARTING_TIMESTAMP,
             minParticipation: MIN_PARTICIPATION,
             claimDelaySeconds: CLAIM_DELAY_SECONDS,
+            totalParticipation: totalParticipation,
             remainingRewards: DISTRIBUTION_TOKEN.balanceOf(address(this)),
             numberOfEpochs: NUMBER_OF_EPOCHS,
             totalDistributionAmount: TOTAL_DISTRIBUTION_AMOUNT,
@@ -216,6 +220,7 @@ contract DistributorV1 is ReentrancyGuard {
             epochTotalParticipation[epoch] += _amountPerEpoch;
             epochUserParticipation[epoch][_recipient] += _amountPerEpoch;
         }
+        totalParticipation += _amountPerEpoch * _range.length;
 
         if (!_hasParticipated[_recipient]) {
             _hasParticipated[_recipient] = true;
@@ -370,6 +375,7 @@ struct GetContractInfoResult {
     uint256 minParticipation;
     uint256 claimDelaySeconds;
 
+    uint256 totalParticipation;
     uint256 remainingRewards;
     uint256 numberOfEpochs;
     uint256 totalDistributionAmount;
