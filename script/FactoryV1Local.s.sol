@@ -3,6 +3,8 @@ pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
 import {FactoryV1} from "../src/v1/FactoryV1.sol";
+import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
+import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {TransferToHook} from "../src/utils/hooks/TransferToHook.sol";
 import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
 import {INonfungiblePositionManager, MintParams} from "../src/external-interfaces/INonfungiblePositionManager.sol";
@@ -34,13 +36,19 @@ contract FactoryV1LocalScript is Script {
         TransferToHook transferToHook = new TransferToHook();
         BuyAndBurnHookV3 buyAndBurnHook = new BuyAndBurnHookV3(address(swapRouter));
 
+        // Child deployers
+        TokenV1Factory tokenFactory = new TokenV1Factory();
+        DistributionV1Factory distributorFactory = new DistributionV1Factory();
+
         factory = new FactoryV1(
             msg.sender,
             400, // 4%
             transferToHook,
             buyAndBurnHook,
             INonfungiblePositionManager(address(positionManager)),
-            IPermit2(address(permit2))
+            IPermit2(address(permit2)),
+            tokenFactory,
+            distributorFactory
         );
 
         // fake token to use as participation token
@@ -59,6 +67,9 @@ contract FactoryV1LocalScript is Script {
         console.log("permit2", address(permit2));
         console.log("positionManager", address(positionManager));
         console.log("swapRouter", address(swapRouter));
+
+        console.log("tokenFactory", address(tokenFactory));
+        console.log("distributorFactory", address(distributorFactory));
 
         console.log("factoryV1", address(factory));
 

@@ -3,6 +3,8 @@ pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
 import {FactoryV1} from "../src/v1/FactoryV1.sol";
+import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
+import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {TransferToHook} from "../src/utils/hooks/TransferToHook.sol";
 import {BuyAndBurnHookV3} from "../src/utils/hooks/BuyAndBurnHookV3.sol";
 import {INonfungiblePositionManager} from "../src/external-interfaces/INonfungiblePositionManager.sol";
@@ -34,13 +36,19 @@ contract FactoryV1Script is Script {
         TransferToHook transferToHook = new TransferToHook();
         BuyAndBurnHookV3 buyAndBurnHook = new BuyAndBurnHookV3(swapRouter);
 
+        // Child deployers
+        TokenV1Factory tokenFactory = new TokenV1Factory();
+        DistributionV1Factory distributorFactory = new DistributionV1Factory();
+
         factory = new FactoryV1(
             initialOwner,
             protocolFeeBps,
             transferToHook,
             buyAndBurnHook,
             INonfungiblePositionManager(positionManager),
-            IPermit2(permit2)
+            IPermit2(permit2),
+            tokenFactory,
+            distributorFactory
         );
 
         console.log("fixedEmission", address(fixedEmission));
@@ -48,6 +56,8 @@ contract FactoryV1Script is Script {
         console.log("exponentialEmission", address(exponentialEmission));
         console.log("transferToHook", address(transferToHook));
         console.log("buyAndBurnHook", address(buyAndBurnHook));
+        console.log("tokenFactory", address(tokenFactory));
+        console.log("distributorFactory", address(distributorFactory));
         console.log("factoryV1", address(factory));
 
         vm.stopBroadcast();
