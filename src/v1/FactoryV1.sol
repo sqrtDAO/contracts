@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {DistributorV1, DistributorConfig} from "./DistributorV1.sol";
+import {DistributorConfig} from "./DistributorV1.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {TokenV1, Allocation} from "./TokenV1.sol";
+import {Allocation} from "./TokenV1.sol";
+import {TokenV1Factory} from "./TokenV1Factory.sol";
+import {DistributionV1Factory} from "./DistributionV1Factory.sol";
 import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
 import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
 import {MintParams} from "../external-interfaces/INonfungiblePositionManager.sol";
@@ -28,6 +30,8 @@ contract FactoryV1 is Ownable {
     BuyAndBurnHookV3 public immutable BUY_AND_BURN_HOOK;
     INonfungiblePositionManager public immutable POSITION_MANAGER;
     IPermit2 public immutable PERMIT2;
+    TokenV1Factory public immutable TOKEN_FACTORY;
+    DistributionV1Factory public immutable DISTRIBUTOR_FACTORY;
 
     uint24 public constant LIQUIDITY_POOL_FEE = 3000; // 0.3%
 
@@ -43,13 +47,19 @@ contract FactoryV1 is Ownable {
         TransferToHook _transferToHook,
         BuyAndBurnHookV3 _buyAndBurnHookV3,
         INonfungiblePositionManager _positionManager,
-        IPermit2 _permit2
+        IPermit2 _permit2,
+        TokenV1Factory _tokenFactory,
+        DistributionV1Factory _distributorFactory
     ) Ownable(_initialOwner) {
         protocolFeeBps = _protocolFeeBps;
         POSITION_MANAGER = _positionManager;
         PERMIT2 = _permit2;
         TRANSFER_TO_HOOK = _transferToHook;
         BUY_AND_BURN_HOOK = _buyAndBurnHookV3;
+        TOKEN_FACTORY = _tokenFactory;
+        DISTRIBUTOR_FACTORY = _distributorFactory;
+        _tokenFactory.setFactory(address(this));
+        _distributorFactory.setFactory(address(this));
     }
 
     // --- sqrt governance ---
@@ -69,7 +79,7 @@ contract FactoryV1 is Ownable {
         public
         returns (address tokenAddress)
     {
-        tokenAddress = address(new TokenV1(_name, _symbol, _allocations));
+        tokenAddress = TOKEN_FACTORY.createToken(_name, _symbol, _allocations);
         creatorOf[tokenAddress] = msg.sender;
         emit NewToken(tokenAddress);
     }
@@ -83,7 +93,7 @@ contract FactoryV1 is Ownable {
         returns (address distributorAddress)
     {
         _injectProtocolFeeShare(_config);
-        distributorAddress = address(new DistributorV1(msg.sender, _config));
+        distributorAddress = DISTRIBUTOR_FACTORY.createDistributor(msg.sender, _config);
 
         if (_pullIn) {
             // sender pays the distribution token
