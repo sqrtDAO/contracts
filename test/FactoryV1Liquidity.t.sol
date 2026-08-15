@@ -4,6 +4,8 @@ pragma solidity ^0.8.13;
 import {Test} from "forge-std/Test.sol";
 import {Permit2Data, FactoryV1} from "../src/v1/FactoryV1.sol";
 import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
+import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
+import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
 import {INonfungiblePositionManager, MintParams} from "../src/external-interfaces/INonfungiblePositionManager.sol";
 import {DistributorV1, DistributorConfig} from "../src/v1/DistributorV1.sol";
@@ -47,7 +49,9 @@ contract FactoryV1LiquidityTest is Test {
             new TransferToHook(),
             new BuyAndBurnHookV3(address(0x0)),
             INonfungiblePositionManager(address(mockPositionManager)),
-            IPermit2(address(mockPermit2))
+            IPermit2(address(mockPermit2)),
+            new TokenV1Factory(),
+            new DistributionV1Factory()
         );
     }
 
