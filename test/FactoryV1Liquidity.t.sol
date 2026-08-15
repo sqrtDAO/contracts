@@ -136,7 +136,6 @@ contract FactoryV1LiquidityTest is Test {
         DistributorConfig memory config = _buildConfig(totalDistribution, buyBackAndBurnShareBps);
 
         Permit2Data memory participationPermit2 = _emptyPermit2();
-        Permit2Data memory distributionPermit2 = _emptyPermit2();
 
         if (usePermit2) {
             vm.prank(user);

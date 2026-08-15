@@ -9,7 +9,7 @@ import {TransferToHook} from "../src/utils/hooks/TransferToHook.sol";
 import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
 import {INonfungiblePositionManager, MintParams} from "../src/external-interfaces/INonfungiblePositionManager.sol";
 import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
-import {IUniswapV3SwapRouter, ExactInputParams} from "../src/external-interfaces/IUniswapV3SwapRouter.sol";
+import {ExactInputParams} from "../src/external-interfaces/IUniswapV3SwapRouter.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {FixedEmission} from "../src/utils/emission-function/FixedEmission.sol";
 import {LinearEmission} from "../src/utils/emission-function/LinearEmission.sol";
@@ -54,9 +54,9 @@ contract FactoryV1LocalScript is Script {
         // fake token to use as participation token
         Allocation[] memory allocation = new Allocation[](1);
         allocation[0] = Allocation({recipient: address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266), amount: 1000 ether});
-        TokenV1 fakeUSD = new TokenV1("Fake USD", "FUSD", allocation);
+        TokenV1 fakeUsd = new TokenV1("Fake USD", "FUSD", allocation);
 
-        console.log("fakeUSD", address(fakeUSD));
+        console.log("fakeUsd", address(fakeUsd));
 
         console.log("fixedEmission", address(fixedEmission));
         console.log("linearEmission", address(linearEmission));
