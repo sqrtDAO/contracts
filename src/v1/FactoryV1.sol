@@ -21,9 +21,6 @@ contract FactoryV1 is Ownable {
     using SharesLib for Share[];
     using SharesLib for Share;
 
-    event NewDistributor(address indexed distributor);
-    event NewToken(address indexed tokenAddress);
-
     uint256 public protocolFeeBps;
 
     TransferToHook public immutable TRANSFER_TO_HOOK;
@@ -34,12 +31,6 @@ contract FactoryV1 is Ownable {
     DistributionV1Factory public immutable DISTRIBUTOR_FACTORY;
 
     uint24 public constant LIQUIDITY_POOL_FEE = 3000; // 0.3%
-
-    /// (contract => creator)
-    /// @dev this can be used to check if contract address is a valid contract created by this factory and not somewhere else
-    /// but it saves creator address instead of bool "just in case"
-    mapping(address => address) creatorOf; // for tokens
-    mapping(address => address) distributorOf; // for distributions
 
     constructor(
         address _initialOwner,
@@ -79,9 +70,7 @@ contract FactoryV1 is Ownable {
         public
         returns (address tokenAddress)
     {
-        tokenAddress = TOKEN_FACTORY.createToken(_name, _symbol, _allocations);
-        creatorOf[tokenAddress] = msg.sender;
-        emit NewToken(tokenAddress);
+        tokenAddress = TOKEN_FACTORY.createToken(_name, _symbol, _allocations, msg.sender);
     }
 
     /// @dev Make sure you give allowance to Factory contract before call this
@@ -103,9 +92,6 @@ contract FactoryV1 is Ownable {
             // contract pays the distribution token
             IERC20(_config.distributionToken).safeTransfer(distributorAddress, _config.totalDistributionAmount);
         }
-
-        distributorOf[distributorAddress] = msg.sender;
-        emit NewDistributor(distributorAddress);
     }
 
     /// @dev LP tokens are sent to a dead address (burned)
