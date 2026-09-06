@@ -2,8 +2,9 @@
 pragma solidity ^0.8.20;
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract Project is ERC721 {
+contract Project is ERC721, ReentrancyGuard {
     uint256 private _tokenIds;
 
     struct ProjectMetadata {
@@ -22,6 +23,7 @@ contract Project is ERC721 {
 
     function createProject(string memory title, string memory description, string memory logo)
         external
+        nonReentrant
         returns (uint256)
     {
         uint256 tokenId = _tokenIds;
