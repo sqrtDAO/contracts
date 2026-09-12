@@ -658,13 +658,13 @@ contract DistributorV1Test is Test {
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
         vm.expectEmit(true, true, true, true);
-        emit DistributorV1.Claimed(participant, 0, 1, 100 ether);
+        emit DistributorV1.Claimed(participant, 0, 1, 100 ether, 0);
 
         vm.prank(address(0xCAFE));
         distributor.claim(participant, Range({from: 0, length: 1}));
     }
 
-    function testClaimForFeeEmitsClaimedWithReducedAmount() public {
+    function testClaimForFeeEmitsClaimedWithGrossAndFee() public {
         _setupParticipant();
 
         vm.prank(participant);
@@ -672,13 +672,18 @@ contract DistributorV1Test is Test {
 
         vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
 
-        uint256 expectedUserAmount = 100 ether - (100 ether * 500 / 10000);
+        uint256 expectedFee = 100 ether * 500 / 10000;
+        uint256 expectedUserAmount = 100 ether - expectedFee;
 
         vm.expectEmit(true, true, true, true);
-        emit DistributorV1.Claimed(participant, 0, 1, expectedUserAmount);
+        emit DistributorV1.Claimed(participant, 0, 1, 100 ether, expectedFee);
 
         vm.prank(address(0xCAFE));
-        distributor.claim(participant, Range({from: 0, length: 1}));
+        uint256 claimed = distributor.claim(participant, Range({from: 0, length: 1}));
+
+        // return value stays net (what the user actually received)
+        assertEq(claimed, expectedUserAmount);
+        assertEq(expectedUserAmount, 100 ether - expectedFee);
     }
 
     function testClaimForIsNotReentrant() public {

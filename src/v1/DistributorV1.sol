@@ -20,7 +20,7 @@ contract DistributorV1 is ReentrancyGuard {
     event Participated(
         address indexed participant, address recipient, uint256 fromEpoch, uint256 numEpochs, uint256 amountPerEpoch
     );
-    event Claimed(address indexed claimant, uint256 fromEpoch, uint256 numEpochs, uint256 totalClaimed);
+    event Claimed(address indexed claimant, uint256 fromEpoch, uint256 numEpochs, uint256 grossAmount, uint256 fee);
     event DrainHookCall(uint256 amount, uint256 nextDrainHookToCall);
     event ClaimFeeBpsSet(address indexed user, uint256 bps);
 
@@ -286,16 +286,19 @@ contract DistributorV1 is ReentrancyGuard {
 
         require(claimAmount > 0, "nothing to claim");
 
+        uint256 grossAmount = claimAmount;
+        uint256 fee = 0;
+
         // third party claim fee
         if (msg.sender != _user && claimFeeBps[_user] != 0) {
-            uint256 fee = (claimAmount * claimFeeBps[_user]) / 10000;
+            fee = (claimAmount * claimFeeBps[_user]) / 10000;
             DISTRIBUTION_TOKEN.safeTransfer(msg.sender, fee);
             claimAmount -= fee;
         }
 
         DISTRIBUTION_TOKEN.safeTransfer(_user, claimAmount);
 
-        emit Claimed(_user, _range.from, _range.length, claimAmount);
+        emit Claimed(_user, _range.from, _range.length, grossAmount, fee);
     }
 
     /**
