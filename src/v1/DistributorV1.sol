@@ -208,7 +208,7 @@ contract DistributorV1 is ReentrancyGuard {
     ) public nonReentrant {
         _verifyAllowlist(_allowlistSignature);
         uint256 currEpoch = currentEpoch();
-        require(block.timestamp >= STARTING_TIMESTAMP);
+        // require(block.timestamp >= STARTING_TIMESTAMP); // already checked in `currentEpoch()` function
         require(_range.from >= currEpoch, "Passed epoch participation not allowed");
         require(_range.length != 0, "Range length is zero");
         require(_range.from + _range.length <= NUMBER_OF_EPOCHS, "Out of range");
