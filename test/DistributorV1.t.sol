@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {DistributorV1, DistributorConfig, Range, GetContractInfoResult, EpochInfo} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
+import {IEmissionFunction} from "../src/utils/emission-function/IEmissionFunction.sol";
 import {Share} from "src/utils/Shares.sol";
 import {Hook} from "src/utils/Hook.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
@@ -60,6 +61,72 @@ contract DistributorV1Test is Test {
         );
 
         require(distributionToken.transfer(address(distributor), 1_000 ether), "transfer failed");
+    }
+
+    // --- constructor validation tests ---
+
+    function testConstructorRevertsOnZeroEpochDuration() public {
+        DistributorConfig memory config = _defaultConfig();
+        config.epochDuration = 0;
+        vm.expectRevert(bytes("epoch duration is zero"));
+        new DistributorV1(address(this), config);
+    }
+
+    function testConstructorRevertsOnPastStartTimestamp() public {
+        vm.warp(startTimestamp + 1);
+        DistributorConfig memory config = _defaultConfig();
+        config.startTimestamp = startTimestamp;
+        vm.expectRevert(bytes("start timestamp in the past"));
+        new DistributorV1(address(this), config);
+    }
+
+    function testConstructorRevertsOnZeroNumberOfEpochs() public {
+        DistributorConfig memory config = _defaultConfig();
+        config.numberOfEpochs = 0;
+        vm.expectRevert(bytes("number of epochs is zero"));
+        new DistributorV1(address(this), config);
+    }
+
+    function testConstructorAllowsStartTimestampEqualToNow() public {
+        DistributorConfig memory config = _defaultConfig();
+        DistributorV1 d = new DistributorV1(address(this), config);
+        assertEq(d.currentEpoch(), 0);
+    }
+
+    function testConstructorRevertsOnZeroDistributionToken() public {
+        DistributorConfig memory config = _defaultConfig();
+        config.distributionToken = address(0);
+        vm.expectRevert(bytes("distribution token is zero"));
+        new DistributorV1(address(this), config);
+    }
+
+    function testConstructorRevertsOnZeroParticipationToken() public {
+        DistributorConfig memory config = _defaultConfig();
+        config.participationToken = address(0);
+        vm.expectRevert(bytes("participation token is zero"));
+        new DistributorV1(address(this), config);
+    }
+
+    function testConstructorRevertsOnZeroEmissionContract() public {
+        DistributorConfig memory config = _defaultConfig();
+        config.emissionFunction.emissionContract = IEmissionFunction(address(0));
+        vm.expectRevert(bytes("emission contract is zero"));
+        new DistributorV1(address(this), config);
+    }
+
+    function testConstructorRevertsOnExpiredAllowlist() public {
+        DistributorConfig memory config = _defaultConfig();
+        config.allowlistSigner = address(0xABCD);
+        config.allowlistDeadline = block.timestamp - 1;
+        vm.expectRevert(bytes("allowlist expired"));
+        new DistributorV1(address(this), config);
+    }
+
+    function testConstructorAllowsAllowlistDeadlineEqualToNow() public {
+        DistributorConfig memory config = _defaultConfig();
+        config.allowlistSigner = address(0xABCD);
+        config.allowlistDeadline = block.timestamp;
+        new DistributorV1(address(this), config);
     }
 
     function testParticipateAndClaimAfterDelay() public {
@@ -642,6 +709,26 @@ contract DistributorV1Test is Test {
     }
 
     // --- helpers ---
+
+    function _defaultConfig() internal view returns (DistributorConfig memory) {
+        return DistributorConfig({
+            distributionToken: address(distributionToken),
+            participationToken: address(participationToken),
+            epochDuration: epochDuration,
+            startTimestamp: startTimestamp,
+            minParticipation: 1 ether,
+            claimDelaySeconds: claimDelaySeconds,
+            allowFutureEpochParticipation: true,
+            emissionFunction: EmissionFunction({
+                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+            }),
+            shares: _singleShare(10000, address(0), ""),
+            allowlistSigner: address(0),
+            allowlistDeadline: 0,
+            numberOfEpochs: 100,
+            totalDistributionAmount: 100 ether
+        });
+    }
 
     function _singleShare(uint256 bps, address hookAddress, bytes memory callData)
         internal

@@ -66,6 +66,16 @@ contract DistributorV1 is ReentrancyGuard {
     mapping(address => uint256) public claimFeeBps;
 
     constructor(address _creator, DistributorConfig memory _config) {
+        require(_config.epochDuration > 0, "epoch duration is zero");
+        require(_config.startTimestamp >= block.timestamp, "start timestamp in the past");
+        require(_config.numberOfEpochs > 0, "number of epochs is zero");
+        require(_config.distributionToken != address(0), "distribution token is zero");
+        require(_config.participationToken != address(0), "participation token is zero");
+        require(address(_config.emissionFunction.emissionContract) != address(0), "emission contract is zero");
+        require(
+            _config.allowlistSigner == address(0) || _config.allowlistDeadline >= block.timestamp, "allowlist expired"
+        );
+
         DISTRIBUTION_TOKEN = IERC20(_config.distributionToken);
         PARTICIPATION_TOKEN = IERC20(_config.participationToken);
         EPOCH_DURATION = _config.epochDuration;
