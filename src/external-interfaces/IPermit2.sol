@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.13;
+pragma solidity 0.8.30;
 
 /// @notice Minimal Permit2 interface for signature-based token transfers
 interface IPermit2 {
