@@ -175,6 +175,13 @@ contract FactoryV1 is Ownable {
 
         (tokenId, liquidity, amount0, amount1) = POSITION_MANAGER.mint(params);
 
+        if (IERC20(token0).allowance(address(this), address(POSITION_MANAGER)) != 0) {
+            IERC20(token0).approve(address(POSITION_MANAGER), 0);
+        }
+        if (IERC20(token1).allowance(address(this), address(POSITION_MANAGER)) != 0) {
+            IERC20(token1).approve(address(POSITION_MANAGER), 0);
+        }
+
         uint256 refund0 = amount0Desired - amount0;
         if (refund0 > 0) IERC20(token0).safeTransfer(msg.sender, refund0);
         uint256 refund1 = amount1Desired - amount1;

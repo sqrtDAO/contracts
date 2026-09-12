@@ -268,6 +268,56 @@ contract FactoryV1LiquidityTest is Test {
         assertEq(participationToken.balanceOf(address(mockPositionManager)), amount0);
         assertEq(distributionToken.balanceOf(address(mockPositionManager)), amount1);
     }
+
+    /// @dev Exercises the partial-pull path: the position manager consumes less than desired,
+    ///      the factory refunds the leftover to the user, and the unused allowance to the
+    ///      position manager is reset to zero.
+    function testCreatePoolAndAddLiquidityResetsLeftoverApprovals() public {
+        MockPositionManagerPartial partialManager = new MockPositionManagerPartial();
+        FactoryV1 partialFactory = new FactoryV1(
+            owner,
+            0,
+            new TransferToHook(),
+            new BuyAndBurnHookV3(address(0x0)),
+            INonfungiblePositionManager(address(partialManager)),
+            IPermit2(address(mockPermit2)),
+            new TokenV1Factory(),
+            new DistributionV1Factory()
+        );
+
+        uint256 amount0 = 100 ether;
+        uint256 amount1 = 50 ether;
+
+        participationToken.mint(user, amount0);
+        distributionToken.mint(user, amount1);
+
+        vm.startPrank(user);
+        participationToken.approve(address(partialFactory), amount0);
+        distributionToken.approve(address(mockPermit2), amount1);
+        partialFactory.createPoolAndAddLiquidity(
+            address(participationToken),
+            address(distributionToken),
+            SQRT_PRICE_1_1,
+            amount0,
+            amount1,
+            true, // _pullIn: pull distribution token too (permit2 path)
+            _emptyPermit2(),
+            _distributionPermit2(amount1)
+        );
+        vm.stopPrank();
+
+        // token0 consumes desired - 10 ether, token1 consumes desired - 5 ether;
+        // the factory refunds each leftover to the user
+        bool participationIsToken0 = address(participationToken) < address(distributionToken);
+        uint256 participationLeftover = participationIsToken0 ? 10 ether : 5 ether;
+        uint256 distributionLeftover = participationIsToken0 ? 5 ether : 10 ether;
+        assertEq(participationToken.balanceOf(user), participationLeftover);
+        assertEq(distributionToken.balanceOf(user), distributionLeftover);
+
+        // unused allowances to the position manager were reset to zero
+        assertEq(participationToken.allowance(address(partialFactory), address(partialManager)), 0);
+        assertEq(distributionToken.allowance(address(partialFactory), address(partialManager)), 0);
+    }
 }
 
 /// @notice Minimal Permit2 mock: ignores signature, just moves tokens like the real one would.
@@ -295,5 +345,24 @@ contract MockPositionManager {
         IERC20(params.token0).transferFrom(msg.sender, address(this), params.amount0Desired);
         IERC20(params.token1).transferFrom(msg.sender, address(this), params.amount1Desired);
         return (1, 1, params.amount0Desired, params.amount1Desired);
+    }
+}
+
+/// @dev Like MockPositionManager but consumes less than desired, leaving unused
+///      allowance on the factory (what the real NFPM can do when pool liquidity limits the mint).
+contract MockPositionManagerPartial {
+    function createAndInitializePoolIfNecessary(address, address, uint24, uint160) external view returns (address) {
+        return address(this);
+    }
+
+    function mint(MintParams calldata params)
+        external
+        returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
+    {
+        uint256 pull0 = params.amount0Desired - 10 ether;
+        uint256 pull1 = params.amount1Desired - 5 ether;
+        IERC20(params.token0).transferFrom(msg.sender, address(this), pull0);
+        IERC20(params.token1).transferFrom(msg.sender, address(this), pull1);
+        return (1, 1, uint128(pull0), pull1);
     }
 }
