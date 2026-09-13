@@ -59,7 +59,7 @@ contract FactoryV1 is Ownable {
         protocolFeeBps = _protocolFeeBps;
     }
 
-    function drain(address _token, address _to) public onlyOwner {
+    function sweepToken(address _token, address _to) public onlyOwner {
         uint256 balance = IERC20(_token).balanceOf(address(this));
         IERC20(_token).safeTransfer(_to, balance);
     }

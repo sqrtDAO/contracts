@@ -125,25 +125,25 @@ contract FactoryV1Test is Test {
         factory.setProtocolFeeBps(99);
     }
 
-    function testDrainTokens() public {
+    function testSweepTokens() public {
         // mint some tokens to factory
         ERC20Mock token = new ERC20Mock();
         token.mint(address(factory), 500 ether);
 
         address recipient = address(0xFACE);
         vm.prank(owner);
-        factory.drain(address(token), recipient);
+        factory.sweepToken(address(token), recipient);
 
         assertEq(token.balanceOf(address(factory)), 0);
         assertEq(token.balanceOf(recipient), 500 ether);
     }
 
-    function testRevertDrainNonOwner() public {
+    function testRevertSweepNonOwner() public {
         ERC20Mock token = new ERC20Mock();
         token.mint(address(factory), 500 ether);
 
         vm.prank(address(0xDEAD));
         vm.expectRevert();
-        factory.drain(address(token), address(0xDEAD));
+        factory.sweepToken(address(token), address(0xDEAD));
     }
 }

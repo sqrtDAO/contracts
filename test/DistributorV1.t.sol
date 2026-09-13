@@ -756,9 +756,9 @@ contract DistributorV1Test is Test {
         vm.stopPrank();
     }
 
-    // --- drainHookOnlyPassedEpochs tests ---
+    // --- releaseEpochFunds tests ---
 
-    function _createDistributorWithDrainHook(address hookAddress) internal returns (DistributorV1) {
+    function _createDistributorWithReleaseHook(address hookAddress) internal returns (DistributorV1) {
         Share[] memory shares = _singleShare(10000, hookAddress, "");
 
         DistributorV1 d = new DistributorV1(
@@ -785,9 +785,9 @@ contract DistributorV1Test is Test {
         return d;
     }
 
-    function testDrainHookOnlyPassedEpochsReleasesOnlyPassedParticipation() public {
+    function testReleaseFundsOnlyPassedEpochsReleasesOnlyPassedParticipation() public {
         PullingHook pullingHook = new PullingHook(address(participationToken));
-        DistributorV1 limited = _createDistributorWithDrainHook(address(pullingHook));
+        DistributorV1 limited = _createDistributorWithReleaseHook(address(pullingHook));
         participationToken.mint(participant, 20 ether);
 
         vm.startPrank(participant);
@@ -802,16 +802,16 @@ contract DistributorV1Test is Test {
         assertEq(limited.currentEpoch(), 1);
 
         vm.prank(participant);
-        limited.callDrainHook();
+        limited.releaseEpochFunds();
 
         uint256 epochBalance = 10 ether;
         assertEq(pullingHook.pulled(), epochBalance, "hook gets full epoch 0 amount");
         assertEq(participationToken.balanceOf(address(limited)), 10 ether, "epoch 2 participation remains");
     }
 
-    function testDrainHookOnlyPassedEpochsMultiplePassedEpochs() public {
+    function testReleaseFundsOnlyPassedEpochsMultiplePassedEpochs() public {
         PullingHook pullingHook = new PullingHook(address(participationToken));
-        DistributorV1 limited = _createDistributorWithDrainHook(address(pullingHook));
+        DistributorV1 limited = _createDistributorWithReleaseHook(address(pullingHook));
         participationToken.mint(participant, 30 ether);
 
         vm.startPrank(participant);
@@ -823,16 +823,16 @@ contract DistributorV1Test is Test {
         assertEq(limited.currentEpoch(), 3);
 
         vm.prank(participant);
-        limited.callDrainHook();
+        limited.releaseEpochFunds();
 
         uint256 epochSum = 30 ether;
         assertEq(pullingHook.pulled(), epochSum, "hook gets all 3 epochs");
-        assertEq(participationToken.balanceOf(address(limited)), 0, "all participation drained");
+        assertEq(participationToken.balanceOf(address(limited)), 0, "all participation released");
     }
 
-    function testDrainHookOnlyPassedEpochsNoPassedEpochsReleasesNothing() public {
+    function testReleaseFundsOnlyPassedEpochsNoPassedEpochsReleasesNothing() public {
         PullingHook pullingHook = new PullingHook(address(participationToken));
-        DistributorV1 limited = _createDistributorWithDrainHook(address(pullingHook));
+        DistributorV1 limited = _createDistributorWithReleaseHook(address(pullingHook));
         participationToken.mint(participant, 10 ether);
 
         vm.startPrank(participant);
@@ -844,7 +844,7 @@ contract DistributorV1Test is Test {
         assertEq(limited.currentEpoch(), 0);
 
         vm.expectRevert(bytes("all passed epochs already claimed"));
-        limited.callDrainHook();
+        limited.releaseEpochFunds();
 
         assertEq(pullingHook.pulled(), 0, "no epochs passed, hook gets nothing");
         assertEq(participationToken.balanceOf(address(limited)), 10 ether, "all participation remains");

@@ -21,7 +21,7 @@ contract DistributorV1 is ReentrancyGuard {
         address indexed participant, address recipient, uint256 fromEpoch, uint256 numEpochs, uint256 amountPerEpoch
     );
     event Claimed(address indexed claimant, uint256 fromEpoch, uint256 numEpochs, uint256 grossAmount, uint256 fee);
-    event DrainHookCall(uint256 amount, uint256 nextDrainHookToCall);
+    event EpochFundsReleased(uint256 amount, uint256 nextEpochToRelease);
     event ClaimFeeBpsSet(address indexed user, uint256 bps);
 
     IERC20 public immutable DISTRIBUTION_TOKEN;
@@ -58,7 +58,7 @@ contract DistributorV1 is ReentrancyGuard {
     // tracks addresses that have ever participated (keyed by recipient)
     mapping(address => bool) private _hasParticipated;
 
-    // tracks which epochs have had their drain hook called
+    // tracks which epochs have had their funds released
     uint256 public nextEpochToRelease = 0;
 
     uint256 public totalParticipation = 0;
@@ -322,7 +322,7 @@ contract DistributorV1 is ReentrancyGuard {
      * @notice you should call this manually after each epoch ends
      * @dev won't revert if hook fails (just returns false)
      */
-    function callDrainHook() public {
+    function releaseEpochFunds() public {
         uint256 currEpoch = currentEpoch();
 
         require(nextEpochToRelease < currEpoch, "all passed epochs already claimed");
@@ -339,7 +339,7 @@ contract DistributorV1 is ReentrancyGuard {
             shares[i].approveAndCall(PARTICIPATION_TOKEN, fund);
         }
 
-        emit DrainHookCall(fund, nextEpochToRelease);
+        emit EpochFundsReleased(fund, nextEpochToRelease);
     }
 }
 
