@@ -8,6 +8,13 @@ contract FixedEmission is IEmissionFunction {
         FixedEmissionConfig memory config = abi.decode(_curveConfig, (FixedEmissionConfig));
         return config.amount;
     }
+
+    /// @notice every epoch gives the same reward so the sum is just a multiplication (exact, O(1))
+    function calculateTotal(bytes calldata _curveConfig, uint256 _numEpochs) external pure returns (uint256 total) {
+        if (_numEpochs == 0) return 0;
+        FixedEmissionConfig memory config = abi.decode(_curveConfig, (FixedEmissionConfig));
+        return config.amount * _numEpochs;
+    }
 }
 
 struct FixedEmissionConfig {

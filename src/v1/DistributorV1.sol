@@ -75,6 +75,13 @@ contract DistributorV1 is ReentrancyGuard {
         require(
             _config.allowlistSigner == address(0) || _config.allowlistDeadline >= block.timestamp, "allowlist expired"
         );
+        // make sure the amount that will be pulled into this contract covers rewards of all epochs
+        require(
+            _config.totalDistributionAmount
+                >= _config.emissionFunction.emissionContract
+                    .calculateTotal(_config.emissionFunction.curveConfig, _config.numberOfEpochs),
+            "total distribution amount is not enough"
+        );
 
         DISTRIBUTION_TOKEN = IERC20(_config.distributionToken);
         PARTICIPATION_TOKEN = IERC20(_config.participationToken);
@@ -356,6 +363,9 @@ contract DistributorV1 is ReentrancyGuard {
 /// @param emissionFunction calculates reward of an epoch (e.g. curve or linear function)
 /// @param allowlistSigner address that signs participation permits (address(0) = allowlist disabled)
 /// @param allowlistDeadline timestamp after which anyone can participate without a signature
+/// @param numberOfEpochs total number of epochs of the distribution
+/// @param totalDistributionAmount amount of distribution token that will be transferred to this contract,
+///        constructor reverts if it does not cover the sum of rewards of all epochs
 struct DistributorConfig {
     address distributionToken;
     address participationToken;
