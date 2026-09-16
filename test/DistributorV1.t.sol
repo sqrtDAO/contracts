@@ -4,6 +4,8 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {DistributorV1, DistributorConfig, Range, GetContractInfoResult, EpochInfo} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
+import {LinearEmission, LinearEmissionConfig} from "../src/utils/emission-function/LinearEmission.sol";
+import {ExponentialEmission, ExponentialEmissionConfig} from "../src/utils/emission-function/ExponentialEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {IEmissionFunction} from "../src/utils/emission-function/IEmissionFunction.sol";
 import {Share} from "src/utils/Shares.sol";
@@ -56,7 +58,7 @@ contract DistributorV1Test is Test {
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 100 ether
+                totalDistributionAmount: 10_000 ether
             })
         );
 
@@ -127,6 +129,88 @@ contract DistributorV1Test is Test {
         config.allowlistSigner = address(0xABCD);
         config.allowlistDeadline = block.timestamp;
         new DistributorV1(address(this), config);
+    }
+
+    // --- constructor supply check tests ---
+
+    function testConstructorRevertsWhenTotalDistributionAmountBelowSum() public {
+        // default config: 100 epochs of 100 ether = 10_000 ether total rewards
+        DistributorConfig memory config = _defaultConfig();
+        config.totalDistributionAmount = 9_999 ether;
+        vm.expectRevert(bytes("total distribution amount is not enough"));
+        new DistributorV1(address(this), config);
+    }
+
+    function testConstructorAllowsExactSum() public {
+        DistributorConfig memory config = _defaultConfig();
+        config.totalDistributionAmount = 10_000 ether;
+        DistributorV1 d = new DistributorV1(address(this), config);
+        assertEq(d.TOTAL_DISTRIBUTION_AMOUNT(), 10_000 ether);
+    }
+
+    function testConstructorAllowsOverfundedDistribution() public {
+        DistributorConfig memory config = _defaultConfig();
+        config.totalDistributionAmount = 20_000 ether;
+        DistributorV1 d = new DistributorV1(address(this), config);
+        assertEq(d.TOTAL_DISTRIBUTION_AMOUNT(), 20_000 ether);
+    }
+
+    function testConstructorChecksExponentialEmissionSum() public {
+        ExponentialEmission exp = new ExponentialEmission();
+        DistributorConfig memory config = _defaultConfig();
+        // halving emission: 1000 ether, 500 ether, 250 ether, ... -> total ~ 2000 ether
+        config.emissionFunction = EmissionFunction({
+            emissionContract: exp,
+            curveConfig: abi.encode(
+                ExponentialEmissionConfig({initialAmount: 1_000 ether, numerator: 1, denominator: 2})
+            )
+        });
+
+        config.totalDistributionAmount = 1_999 ether;
+        vm.expectRevert(bytes("total distribution amount is not enough"));
+        new DistributorV1(address(this), config);
+
+        config.totalDistributionAmount = 2_000 ether;
+        DistributorV1 d = new DistributorV1(address(this), config);
+        assertEq(d.TOTAL_DISTRIBUTION_AMOUNT(), 2_000 ether);
+    }
+
+    function testConstructorChecksLinearEmissionSum() public {
+        LinearEmission linear = new LinearEmission();
+        DistributorConfig memory config = _defaultConfig();
+        // 1000 ether decreasing by 100 ether per epoch: epochs 0..9 give 1000..100, rest 0 -> 5500 ether
+        config.emissionFunction = EmissionFunction({
+            emissionContract: linear,
+            curveConfig: abi.encode(LinearEmissionConfig({base: 1_000 ether, slope: -100 ether}))
+        });
+
+        config.totalDistributionAmount = 5_499 ether;
+        vm.expectRevert(bytes("total distribution amount is not enough"));
+        new DistributorV1(address(this), config);
+
+        config.totalDistributionAmount = 5_500 ether;
+        DistributorV1 d = new DistributorV1(address(this), config);
+        assertEq(d.TOTAL_DISTRIBUTION_AMOUNT(), 5_500 ether);
+    }
+
+    function testTotalClaimedMatchesCalculateTotal() public {
+        // single participant participating in the first 10 epochs must be able to claim
+        // exactly the amount the emission function promises for those epochs
+        vm.prank(participant);
+        participationToken.approve(address(distributor), 100 ether);
+
+        vm.prank(participant);
+        distributor.participate(10 ether, Range({from: 0, length: 10}), participant, new bytes(0));
+
+        vm.warp(startTimestamp + (10 * epochDuration) + claimDelaySeconds);
+
+        vm.prank(participant);
+        uint256 claimed = distributor.claim(participant, Range({from: 0, length: 10}));
+
+        bytes memory curveConfig = abi.encode(FixedEmissionConfig({amount: 100 ether}));
+        assertEq(claimed, emission.calculateTotal(curveConfig, 10));
+        assertEq(claimed, 1_000 ether);
+        assertLe(claimed, distributor.TOTAL_DISTRIBUTION_AMOUNT());
     }
 
     function testParticipateAndClaimAfterDelay() public {
@@ -298,7 +382,7 @@ contract DistributorV1Test is Test {
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 100 ether
+                totalDistributionAmount: 10_000 ether
             })
         );
 
@@ -353,7 +437,7 @@ contract DistributorV1Test is Test {
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 100 ether
+                totalDistributionAmount: 10_000 ether
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -392,7 +476,7 @@ contract DistributorV1Test is Test {
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 100 ether
+                totalDistributionAmount: 10_000 ether
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -436,7 +520,7 @@ contract DistributorV1Test is Test {
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 100 ether
+                totalDistributionAmount: 10_000 ether
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -731,7 +815,7 @@ contract DistributorV1Test is Test {
             allowlistSigner: address(0),
             allowlistDeadline: 0,
             numberOfEpochs: 100,
-            totalDistributionAmount: 100 ether
+            totalDistributionAmount: 10_000 ether
         });
     }
 
@@ -778,7 +862,7 @@ contract DistributorV1Test is Test {
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 100 ether
+                totalDistributionAmount: 10_000 ether
             })
         );
         distributionToken.mint(address(d), 1_000 ether);
@@ -874,7 +958,7 @@ contract DistributorV1Test is Test {
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 100 ether
+                totalDistributionAmount: 10_000 ether
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);

@@ -58,4 +58,11 @@ contract SimpleExponentialEmission is IEmissionFunction {
         uint256 divisor = config.denominator ** _epochNumber;
         return (config.initialAmount * factor) / divisor;
     }
+
+    function calculateTotal(bytes calldata _curveConfig, uint256 _numEpochs) external pure returns (uint256 total) {
+        ExponentialEmissionConfig memory config = abi.decode(_curveConfig, (ExponentialEmissionConfig));
+        for (uint256 i = 0; i < _numEpochs; i++) {
+            total += (config.initialAmount * config.numerator ** i) / config.denominator ** i;
+        }
+    }
 }

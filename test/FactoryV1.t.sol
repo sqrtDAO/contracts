@@ -74,13 +74,14 @@ contract FactoryV1Test is Test {
             allowlistSigner: address(0),
             allowlistDeadline: 0,
             numberOfEpochs: 100,
-            totalDistributionAmount: 100 ether
+            totalDistributionAmount: 10_000 ether
         });
 
         vm.prank(user);
         participationToken.approve(address(factory), participationAmount);
 
-        distributionToken.mint(user, 1_000 ether);
+        // factory pulls totalDistributionAmount from the user
+        distributionToken.mint(user, 10_000 ether);
         vm.prank(user);
         distributionToken.approve(address(factory), type(uint256).max);
 

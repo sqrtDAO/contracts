@@ -81,7 +81,9 @@ contract FactoryListTest is Test {
             claimDelaySeconds: claimDelaySeconds,
             allowFutureEpochParticipation: true,
             emissionFunction: EmissionFunction({
-                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+                // 100 epochs of 1 ether = 100 ether, callers pass totalAmount >= 100 ether
+                emissionContract: emission,
+                curveConfig: abi.encode(FixedEmissionConfig({amount: 1 ether}))
             }),
             shares: shares,
             allowlistSigner: address(0),

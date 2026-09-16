@@ -75,7 +75,9 @@ contract FactoryV1LiquidityTest is Test {
             claimDelaySeconds: claimDelaySeconds,
             allowFutureEpochParticipation: true,
             emissionFunction: EmissionFunction({
-                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+                // 100 epochs of 1 ether = 100 ether, matches totalDistribution passed by callers
+                emissionContract: emission,
+                curveConfig: abi.encode(FixedEmissionConfig({amount: 1 ether}))
             }),
             shares: shares,
             allowlistSigner: address(0),
