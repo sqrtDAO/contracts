@@ -24,18 +24,18 @@ contract DistributorV1 is ReentrancyGuard {
     event EpochFundsReleased(uint256 amount, uint256 nextEpochToRelease);
     event ClaimFeeBpsSet(address indexed user, uint256 bps);
 
-    IERC20 public immutable DISTRIBUTION_TOKEN;
-    IERC20 public immutable PARTICIPATION_TOKEN;
-    uint256 public immutable EPOCH_DURATION;
-    uint256 public immutable STARTING_TIMESTAMP;
-    uint256 public immutable MIN_PARTICIPATION;
-    uint256 public immutable CLAIM_DELAY_SECONDS;
-    bool public immutable ALLOW_FUTURE_EPOCH_PARTICIPATION;
-    address public immutable ALLOWLIST_SIGNER;
-    uint256 public immutable ALLOWLIST_DEADLINE;
-    uint256 public immutable NUMBER_OF_EPOCHS;
-    uint256 public immutable TOTAL_DISTRIBUTION_AMOUNT;
-    address public immutable CREATOR;
+    IERC20 public DISTRIBUTION_TOKEN;
+    IERC20 public PARTICIPATION_TOKEN;
+    uint256 public EPOCH_DURATION;
+    uint256 public STARTING_TIMESTAMP;
+    uint256 public MIN_PARTICIPATION;
+    uint256 public CLAIM_DELAY_SECONDS;
+    bool public ALLOW_FUTURE_EPOCH_PARTICIPATION;
+    address public ALLOWLIST_SIGNER;
+    uint256 public ALLOWLIST_DEADLINE;
+    uint256 public NUMBER_OF_EPOCHS;
+    uint256 public TOTAL_DISTRIBUTION_AMOUNT;
+    address public CREATOR;
 
     EmissionFunction public emissionFunction;
 

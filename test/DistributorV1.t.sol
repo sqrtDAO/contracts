@@ -131,6 +131,29 @@ contract DistributorV1Test is Test {
         new DistributorV1(address(this), config);
     }
 
+    function testInstancesShareIdenticalDeployedBytecode() public {
+        DistributorConfig memory configA = _defaultConfig();
+        DistributorConfig memory configB = _defaultConfig();
+        configB.distributionToken = address(0x1111);
+        configB.participationToken = address(0x2222);
+        configB.epochDuration = 86_400;
+        configB.startTimestamp = startTimestamp + 999;
+        configB.minParticipation = 42;
+        configB.claimDelaySeconds = 777;
+        configB.allowFutureEpochParticipation = false;
+        configB.allowlistSigner = address(0x3333);
+        configB.allowlistDeadline = startTimestamp + 888;
+        configB.numberOfEpochs = 7;
+        configB.totalDistributionAmount = 700 ether;
+        configB.shares = _singleShare(10000, address(0x4444), hex"abcd");
+
+        DistributorV1 a = new DistributorV1(address(0xAAAA), configA);
+        DistributorV1 b = new DistributorV1(address(0xBBBB), configB);
+
+        assertEq(address(distributor).codehash, address(a).codehash);
+        assertEq(address(a).codehash, address(b).codehash);
+    }
+
     // --- constructor supply check tests ---
 
     function testConstructorRevertsWhenTotalDistributionAmountBelowSum() public {
