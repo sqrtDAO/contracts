@@ -53,7 +53,12 @@ contract FactoryV1LocalScript is Script {
 
         // fake token to use as participation token
         Allocation[] memory allocation = new Allocation[](1);
-        allocation[0] = Allocation({recipient: address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266), amount: 1000 ether});
+        allocation[0] = Allocation({
+            recipient: address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266),
+            amount: 1000 ether,
+            startTime: 0,
+            duration: 0
+        });
         TokenV1 fakeUsd = new TokenV1("Fake USD", "FUSD", allocation);
 
         console.log("fakeUsd", address(fakeUsd));

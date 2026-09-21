@@ -132,8 +132,12 @@ contract FactoryV1LiquidityTest is Test {
 
         // Factory must hold (distributionTokenAmountDesired + totalDistribution) of the new token.
         Allocation[] memory allocations = new Allocation[](1);
-        allocations[0] =
-            Allocation({recipient: address(factory), amount: distributionTokenAmountDesired + totalDistribution});
+        allocations[0] = Allocation({
+            recipient: address(factory),
+            amount: distributionTokenAmountDesired + totalDistribution,
+            startTime: 0,
+            duration: 0
+        });
 
         DistributorConfig memory config = _buildConfig(totalDistribution, buyBackAndBurnShareBps);
 
@@ -218,8 +222,12 @@ contract FactoryV1LiquidityTest is Test {
         participationToken.mint(user, participationAmount);
 
         Allocation[] memory allocations = new Allocation[](1);
-        allocations[0] =
-            Allocation({recipient: address(factory), amount: distributionTokenAmountDesired + totalDistribution});
+        allocations[0] = Allocation({
+            recipient: address(factory),
+            amount: distributionTokenAmountDesired + totalDistribution,
+            startTime: 0,
+            duration: 0
+        });
 
         DistributorConfig memory config = _buildConfig(totalDistribution, 0);
 

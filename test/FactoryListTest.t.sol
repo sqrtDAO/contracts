@@ -60,7 +60,7 @@ contract FactoryListTest is Test {
 
     function _createToken() internal returns (address) {
         Allocation[] memory allocs = new Allocation[](1);
-        allocs[0] = Allocation({recipient: address(this), amount: 1 ether});
+        allocs[0] = Allocation({recipient: address(this), amount: 1 ether, startTime: 0, duration: 0});
         return factory.createToken("T", "T", allocs);
     }
 
@@ -282,7 +282,7 @@ contract FactoryListTest is Test {
 
     function testCreatorOfTokenRecordsCaller() public {
         Allocation[] memory allocs = new Allocation[](1);
-        allocs[0] = Allocation({recipient: address(this), amount: 1 ether});
+        allocs[0] = Allocation({recipient: address(this), amount: 1 ether, startTime: 0, duration: 0});
 
         vm.prank(user);
         address token = factory.createToken("T", "T", allocs);

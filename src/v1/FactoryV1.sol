@@ -192,6 +192,7 @@ contract FactoryV1 is Ownable {
     /// @notice _config.distributionToken will be overwrite by new created token just set it to address(0) or something
     /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 set zero if you don't want to inject buyAndBurn make sure shares sum up to 100% after buyAndBurn injection
     /// @notice allocate token for Factory contract (this contract) as much as totalDistributionAmount + _distributionTokenAmountDesired
+    ///         with startTime = 0 and duration = 0 so tokens are minted to this contract at deployment
     function createTokenAndLiquidityAndDistribution(
         string memory _tokenName,
         string memory _tokenSymbol,
