@@ -328,6 +328,182 @@ contract FactoryV1LiquidityTest is Test {
         assertEq(participationToken.allowance(address(partialFactory), address(partialManager)), 0);
         assertEq(distributionToken.allowance(address(partialFactory), address(partialManager)), 0);
     }
+
+    // --- createLiquidityAndDistribution tests ---
+
+    /// @dev Runs createLiquidityAndDistribution end-to-end for an existing (mock) distribution token.
+    /// usePermit2 switches the participation token pull to Permit2; useDistributionPermit2 switches
+    /// the distribution-token liquidity pull to Permit2. The distributor pull is always allowance-based.
+    function _createLiquidityAndDistribution(
+        bool usePermit2,
+        bool useDistributionPermit2,
+        uint256 buyBackAndBurnShareBps
+    ) internal returns (address pool, address distributor) {
+        uint256 participationAmount = 100 ether;
+        uint256 distributionTokenAmountDesired = 50 ether;
+        uint256 totalDistribution = 100 ether;
+
+        participationToken.mint(user, participationAmount);
+        distributionToken.mint(user, distributionTokenAmountDesired + totalDistribution);
+
+        DistributorConfig memory config = _buildConfig(totalDistribution, buyBackAndBurnShareBps);
+        config.distributionToken = address(distributionToken);
+
+        Permit2Data memory participationPermit2 = _emptyPermit2();
+        Permit2Data memory distributionPermit2 = _emptyPermit2();
+
+        vm.startPrank(user);
+        if (usePermit2) {
+            participationToken.approve(address(mockPermit2), participationAmount);
+            participationPermit2 = _participationPermit2(participationAmount);
+        } else {
+            participationToken.approve(address(factory), participationAmount);
+        }
+
+        if (useDistributionPermit2) {
+            distributionToken.approve(address(mockPermit2), distributionTokenAmountDesired);
+            distributionPermit2 = _distributionPermit2(distributionTokenAmountDesired);
+            // distributor pull is always allowance-based (createDistributor has no permit2 path)
+            distributionToken.approve(address(factory), totalDistribution);
+        } else {
+            // single approval must cover both the LP pull and the distributor pull
+            distributionToken.approve(address(factory), distributionTokenAmountDesired + totalDistribution);
+        }
+
+        (pool, distributor) = factory.createLiquidityAndDistribution(
+            SQRT_PRICE_1_1,
+            participationAmount,
+            distributionTokenAmountDesired,
+            config,
+            buyBackAndBurnShareBps,
+            participationPermit2,
+            distributionPermit2
+        );
+        vm.stopPrank();
+    }
+
+    function testCreateLiquidityAndDistributionWithAllowance() public {
+        (address pool, address distributor) = _createLiquidityAndDistribution(false, false, 0);
+
+        assertEq(pool, address(mockPositionManager));
+
+        // participation token fully consumed into LP (held by mock position manager)
+        assertEq(participationToken.balanceOf(user), 0);
+        assertEq(participationToken.balanceOf(address(factory)), 0);
+        assertEq(participationToken.balanceOf(address(mockPositionManager)), 100 ether);
+
+        // distribution token: 50 ether into LP, 100 ether into distributor
+        assertEq(distributionToken.balanceOf(user), 0);
+        assertEq(distributionToken.balanceOf(address(factory)), 0);
+        assertEq(distributionToken.balanceOf(address(mockPositionManager)), 50 ether);
+        assertEq(distributionToken.balanceOf(distributor), 100 ether);
+    }
+
+    function testCreateLiquidityAndDistributionWithPermit2() public {
+        (address pool, address distributor) = _createLiquidityAndDistribution(true, true, 0);
+
+        // Same final state as the allowance path.
+        assertEq(pool, address(mockPositionManager));
+
+        assertEq(participationToken.balanceOf(user), 0);
+        assertEq(participationToken.balanceOf(address(factory)), 0);
+        assertEq(participationToken.balanceOf(address(mockPositionManager)), 100 ether);
+
+        assertEq(distributionToken.balanceOf(user), 0);
+        assertEq(distributionToken.balanceOf(address(factory)), 0);
+        assertEq(distributionToken.balanceOf(address(mockPositionManager)), 50 ether);
+        assertEq(distributionToken.balanceOf(distributor), 100 ether);
+    }
+
+    function testCreateLiquidityAndDistributionWithBuyBurn() public {
+        uint256 buyBackAndBurnShareBps = 500;
+        (, address distributor) = _createLiquidityAndDistribution(true, true, buyBackAndBurnShareBps);
+
+        // user share 9500, injected buy&burn 500, injected protocol fee 0
+        DistributorV1 d = DistributorV1(distributor);
+        (uint256 userBps,) = d.shares(0);
+        (uint256 bbBps, Hook memory bbHook) = d.shares(1);
+
+        assertEq(userBps, 10000 - buyBackAndBurnShareBps);
+        assertEq(bbBps, buyBackAndBurnShareBps);
+        assertEq(bbHook.contractAddress, address(factory.BUY_AND_BURN_HOOK()));
+
+        assertEq(distributionToken.balanceOf(distributor), 100 ether);
+    }
+
+    function testCreateLiquidityAndDistributionRevertsWithoutApproval() public {
+        participationToken.mint(user, 100 ether);
+        distributionToken.mint(user, 150 ether);
+
+        DistributorConfig memory config = _buildConfig(100 ether, 0);
+        config.distributionToken = address(distributionToken);
+
+        // no approvals given -> allowance path must revert
+        vm.prank(user);
+        vm.expectRevert();
+        factory.createLiquidityAndDistribution(
+            SQRT_PRICE_1_1, 100 ether, 50 ether, config, 0, _emptyPermit2(), _emptyPermit2()
+        );
+    }
+
+    /// @dev Like testCreatePoolAndAddLiquidityResetsLeftoverApprovals but through the combined
+    /// function: partial mint refunds go back to the user and the distributor still receives
+    /// its full totalDistributionAmount via the allowance pull.
+    function testCreateLiquidityAndDistributionRefundsLeftoverOnPartialMint() public {
+        MockPositionManagerPartial partialManager = new MockPositionManagerPartial();
+        FactoryV1 partialFactory = new FactoryV1(
+            owner,
+            0,
+            new TransferToHook(),
+            new BuyAndBurnHookV3(address(0x0)),
+            INonfungiblePositionManager(address(partialManager)),
+            IPermit2(address(mockPermit2)),
+            new TokenV1Factory(),
+            new DistributionV1Factory()
+        );
+
+        uint256 participationAmount = 100 ether;
+        uint256 distributionTokenAmountDesired = 50 ether;
+        uint256 totalDistribution = 100 ether;
+
+        participationToken.mint(user, participationAmount);
+        distributionToken.mint(user, distributionTokenAmountDesired + totalDistribution);
+
+        DistributorConfig memory config = _buildConfig(totalDistribution, 0);
+        config.distributionToken = address(distributionToken);
+
+        vm.startPrank(user);
+        participationToken.approve(address(partialFactory), participationAmount);
+        distributionToken.approve(address(mockPermit2), distributionTokenAmountDesired);
+        distributionToken.approve(address(partialFactory), totalDistribution);
+        (address pool, address distributor) = partialFactory.createLiquidityAndDistribution(
+            SQRT_PRICE_1_1,
+            participationAmount,
+            distributionTokenAmountDesired,
+            config,
+            0,
+            _emptyPermit2(),
+            _distributionPermit2(distributionTokenAmountDesired)
+        );
+        vm.stopPrank();
+
+        assertEq(pool, address(partialManager));
+
+        // token0 consumes desired - 10 ether, token1 consumes desired - 5 ether;
+        // the factory refunds each leftover to the user
+        bool participationIsToken0 = address(participationToken) < address(distributionToken);
+        uint256 participationLeftover = participationIsToken0 ? 10 ether : 5 ether;
+        uint256 distributionLeftover = participationIsToken0 ? 5 ether : 10 ether;
+        assertEq(participationToken.balanceOf(user), participationLeftover);
+        assertEq(distributionToken.balanceOf(user), distributionLeftover);
+
+        // distributor received its full amount regardless of the partial LP mint
+        assertEq(distributionToken.balanceOf(distributor), totalDistribution);
+
+        // unused allowances to the position manager were reset to zero
+        assertEq(participationToken.allowance(address(partialFactory), address(partialManager)), 0);
+        assertEq(distributionToken.allowance(address(partialFactory), address(partialManager)), 0);
+    }
 }
 
 /// @notice Minimal Permit2 mock: ignores signature, just moves tokens like the real one would.

@@ -225,6 +225,39 @@ contract FactoryV1 is Ownable {
         distributorAddress = createDistributor(_config, false);
     }
 
+    /// @dev this function does two things 1.liquidity pool creation - 2.distribution creation for an already existing distribution token
+    /// @notice for _config.shares, make sure it sums up to (100% - protocolFeeBps) because createDistributor force injects protocol fee to _config.shares
+    /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 set zero if you don't want to inject buyAndBurn make sure shares sum up to 100% after buyAndBurn injection
+    /// @notice unlike createTokenAndLiquidityAndDistribution factory contract doesn't hold any allocation of the distribution token
+    ///         so sender pays both liquidity distribution tokens and totalDistributionAmount
+    /// @param _participationPermit2 empty signature (= no permit2) falls back to allowance-based safeTransferFrom
+    /// @param _distributionPermit2 empty signature (= no permit2) falls back to allowance-based safeTransferFrom
+    function createLiquidityAndDistribution(
+        uint160 _sqrtPriceX96,
+        uint256 _participationTokenAmountDesired,
+        uint256 _distributionTokenAmountDesired,
+        DistributorConfig memory _config,
+        uint256 _buyBackAndBurnShareBps,
+        Permit2Data calldata _participationPermit2,
+        Permit2Data calldata _distributionPermit2
+    ) public returns (address pool, address distributorAddress) {
+        (pool,,,,) = createPoolAndAddLiquidity(
+            _config.participationToken,
+            _config.distributionToken,
+            _sqrtPriceX96,
+            _participationTokenAmountDesired,
+            _distributionTokenAmountDesired,
+            true,
+            _participationPermit2,
+            _distributionPermit2
+        );
+
+        if (_buyBackAndBurnShareBps != 0) _injectBuyAndBurnShare(_config, _buyBackAndBurnShareBps);
+
+        // sender pays the distribution token because factory contract doesn't hold any allocation of it
+        distributorAddress = createDistributor(_config, true);
+    }
+
     // --- Utility functions ---
 
     function _injectProtocolFeeShare(DistributorConfig memory _config) internal view {
