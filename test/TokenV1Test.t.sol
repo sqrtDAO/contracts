@@ -201,4 +201,18 @@ contract TokenV1Test is Test {
         assertEq(info.duration, 0);
         assertEq(info.fullyVestedAt, 0);
     }
+
+    function testInstancesShareIdenticalDeployedBytecode() public {
+        Allocation[] memory allocsA = new Allocation[](1);
+        allocsA[0] = Allocation({recipient: address(1), amount: 1000 ether, startTime: 0, duration: 0});
+
+        Allocation[] memory allocsB = new Allocation[](2);
+        allocsB[0] = Allocation({recipient: address(2), amount: 1, startTime: 999, duration: 12345});
+        allocsB[1] = Allocation({recipient: address(3), amount: 500 ether, startTime: 1, duration: 999});
+
+        TokenV1 a = new TokenV1("AAA", "AAA", allocsA);
+        TokenV1 b = new TokenV1("Some Really Long Token Name", "LONGSYMBOL", allocsB);
+
+        assertEq(address(a).codehash, address(b).codehash);
+    }
 }

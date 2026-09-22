@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {Script, console} from "forge-std/Script.sol";
 import {FactoryV1} from "../src/v1/FactoryV1.sol";
+import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
 import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {DistributorV1, DistributorConfig} from "../src/v1/DistributorV1.sol";
@@ -62,6 +63,13 @@ contract FactoryV1Script is Script {
             })
         );
 
+        // sample TokenV1 deployment so it gets verified on etherscan with `--verify`
+        // (all instances share identical bytecode, so instances created later by
+        // TokenV1Factory are auto-verified against this one)
+        Allocation[] memory sampleAllocations = new Allocation[](1);
+        sampleAllocations[0] = Allocation({recipient: address(1), amount: 1, startTime: 0, duration: 0});
+        TokenV1 sampleToken = new TokenV1("Sample Token", "SAMPLE", sampleAllocations);
+
         // Hooks
         TransferToHook transferToHook = new TransferToHook();
         BuyAndBurnHookV3 buyAndBurnHook = new BuyAndBurnHookV3(swapRouter);
@@ -85,6 +93,7 @@ contract FactoryV1Script is Script {
         console.log("linearEmission", address(linearEmission));
         console.log("exponentialEmission", address(exponentialEmission));
         console.log("sampleDistributor", address(sampleDistributor));
+        console.log("sampleToken", address(sampleToken));
         console.log("transferToHook", address(transferToHook));
         console.log("buyAndBurnHook", address(buyAndBurnHook));
         console.log("tokenFactory", address(tokenFactory));
