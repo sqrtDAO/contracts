@@ -2,7 +2,14 @@
 pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
-import {DistributorV1, DistributorConfig, Range, GetContractInfoResult, EpochInfo} from "../src/v1/DistributorV1.sol";
+import {
+    DistributorV1,
+    DistributorConfig,
+    Range,
+    GetContractInfoResult,
+    EpochInfo,
+    ReleasePolicy
+} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {LinearEmission, LinearEmissionConfig} from "../src/utils/emission-function/LinearEmission.sol";
 import {ExponentialEmission, ExponentialEmissionConfig} from "../src/utils/emission-function/ExponentialEmission.sol";
@@ -43,6 +50,7 @@ contract DistributorV1Test is Test {
 
         distributor = new DistributorV1(
             address(this),
+            address(0),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -51,6 +59,7 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
+                releasePolicy: ReleasePolicy.Anyone,
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
@@ -71,7 +80,7 @@ contract DistributorV1Test is Test {
         DistributorConfig memory config = _defaultConfig();
         config.epochDuration = 0;
         vm.expectRevert(bytes("epoch duration is zero"));
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
     }
 
     function testConstructorRevertsOnPastStartTimestamp() public {
@@ -79,19 +88,19 @@ contract DistributorV1Test is Test {
         DistributorConfig memory config = _defaultConfig();
         config.startTimestamp = startTimestamp;
         vm.expectRevert(bytes("start timestamp in the past"));
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
     }
 
     function testConstructorRevertsOnZeroNumberOfEpochs() public {
         DistributorConfig memory config = _defaultConfig();
         config.numberOfEpochs = 0;
         vm.expectRevert(bytes("number of epochs is zero"));
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
     }
 
     function testConstructorAllowsStartTimestampEqualToNow() public {
         DistributorConfig memory config = _defaultConfig();
-        DistributorV1 d = new DistributorV1(address(this), config);
+        DistributorV1 d = new DistributorV1(address(this), address(0), config);
         assertEq(d.currentEpoch(), 0);
     }
 
@@ -99,21 +108,21 @@ contract DistributorV1Test is Test {
         DistributorConfig memory config = _defaultConfig();
         config.distributionToken = address(0);
         vm.expectRevert(bytes("distribution token is zero"));
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
     }
 
     function testConstructorRevertsOnZeroParticipationToken() public {
         DistributorConfig memory config = _defaultConfig();
         config.participationToken = address(0);
         vm.expectRevert(bytes("participation token is zero"));
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
     }
 
     function testConstructorRevertsOnZeroEmissionContract() public {
         DistributorConfig memory config = _defaultConfig();
         config.emissionFunction.emissionContract = IEmissionFunction(address(0));
         vm.expectRevert(bytes("emission contract is zero"));
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
     }
 
     function testConstructorRevertsOnExpiredAllowlist() public {
@@ -121,14 +130,14 @@ contract DistributorV1Test is Test {
         config.allowlistSigner = address(0xABCD);
         config.allowlistDeadline = block.timestamp - 1;
         vm.expectRevert(bytes("allowlist expired"));
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
     }
 
     function testConstructorAllowsAllowlistDeadlineEqualToNow() public {
         DistributorConfig memory config = _defaultConfig();
         config.allowlistSigner = address(0xABCD);
         config.allowlistDeadline = block.timestamp;
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
     }
 
     function testInstancesShareIdenticalDeployedBytecode() public {
@@ -147,8 +156,8 @@ contract DistributorV1Test is Test {
         configB.totalDistributionAmount = 700 ether;
         configB.shares = _singleShare(10000, address(0x4444), hex"abcd");
 
-        DistributorV1 a = new DistributorV1(address(0xAAAA), configA);
-        DistributorV1 b = new DistributorV1(address(0xBBBB), configB);
+        DistributorV1 a = new DistributorV1(address(0xAAAA), address(0), configA);
+        DistributorV1 b = new DistributorV1(address(0xBBBB), address(0), configB);
 
         assertEq(address(distributor).codehash, address(a).codehash);
         assertEq(address(a).codehash, address(b).codehash);
@@ -161,20 +170,20 @@ contract DistributorV1Test is Test {
         DistributorConfig memory config = _defaultConfig();
         config.totalDistributionAmount = 9_999 ether;
         vm.expectRevert(bytes("total distribution amount is not enough"));
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
     }
 
     function testConstructorAllowsExactSum() public {
         DistributorConfig memory config = _defaultConfig();
         config.totalDistributionAmount = 10_000 ether;
-        DistributorV1 d = new DistributorV1(address(this), config);
+        DistributorV1 d = new DistributorV1(address(this), address(0), config);
         assertEq(d.TOTAL_DISTRIBUTION_AMOUNT(), 10_000 ether);
     }
 
     function testConstructorAllowsOverfundedDistribution() public {
         DistributorConfig memory config = _defaultConfig();
         config.totalDistributionAmount = 20_000 ether;
-        DistributorV1 d = new DistributorV1(address(this), config);
+        DistributorV1 d = new DistributorV1(address(this), address(0), config);
         assertEq(d.TOTAL_DISTRIBUTION_AMOUNT(), 20_000 ether);
     }
 
@@ -191,10 +200,10 @@ contract DistributorV1Test is Test {
 
         config.totalDistributionAmount = 1_999 ether;
         vm.expectRevert(bytes("total distribution amount is not enough"));
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
 
         config.totalDistributionAmount = 2_000 ether;
-        DistributorV1 d = new DistributorV1(address(this), config);
+        DistributorV1 d = new DistributorV1(address(this), address(0), config);
         assertEq(d.TOTAL_DISTRIBUTION_AMOUNT(), 2_000 ether);
     }
 
@@ -209,10 +218,10 @@ contract DistributorV1Test is Test {
 
         config.totalDistributionAmount = 5_499 ether;
         vm.expectRevert(bytes("total distribution amount is not enough"));
-        new DistributorV1(address(this), config);
+        new DistributorV1(address(this), address(0), config);
 
         config.totalDistributionAmount = 5_500 ether;
-        DistributorV1 d = new DistributorV1(address(this), config);
+        DistributorV1 d = new DistributorV1(address(this), address(0), config);
         assertEq(d.TOTAL_DISTRIBUTION_AMOUNT(), 5_500 ether);
     }
 
@@ -390,6 +399,7 @@ contract DistributorV1Test is Test {
 
         DistributorV1 noFutureDistributor = new DistributorV1(
             address(this),
+            address(0),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -398,6 +408,7 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: false,
+                releasePolicy: ReleasePolicy.Anyone,
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
@@ -445,6 +456,7 @@ contract DistributorV1Test is Test {
 
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
+            address(0),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -453,6 +465,7 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
+                releasePolicy: ReleasePolicy.Anyone,
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
@@ -484,6 +497,7 @@ contract DistributorV1Test is Test {
 
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
+            address(0),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -492,6 +506,7 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
+                releasePolicy: ReleasePolicy.Anyone,
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
@@ -528,6 +543,7 @@ contract DistributorV1Test is Test {
 
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
+            address(0),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -536,6 +552,7 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
+                releasePolicy: ReleasePolicy.Anyone,
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
@@ -831,6 +848,7 @@ contract DistributorV1Test is Test {
             minParticipation: 1 ether,
             claimDelaySeconds: claimDelaySeconds,
             allowFutureEpochParticipation: true,
+            releasePolicy: ReleasePolicy.Anyone,
             emissionFunction: EmissionFunction({
                 emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
             }),
@@ -866,10 +884,18 @@ contract DistributorV1Test is Test {
     // --- releaseEpochFunds tests ---
 
     function _createDistributorWithReleaseHook(address hookAddress) internal returns (DistributorV1) {
-        Share[] memory shares = _singleShare(10000, hookAddress, "");
+        return _createDistributorWithPolicy(ReleasePolicy.Anyone, address(0), hookAddress);
+    }
+
+    function _createDistributorWithPolicy(ReleasePolicy _policy, address _factory, address _hookAddress)
+        internal
+        returns (DistributorV1)
+    {
+        Share[] memory shares = _singleShare(10000, _hookAddress, "");
 
         DistributorV1 d = new DistributorV1(
             address(this),
+            _factory,
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -878,6 +904,7 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
+                releasePolicy: _policy,
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
@@ -966,6 +993,7 @@ contract DistributorV1Test is Test {
 
         DistributorV1 allowlisted = new DistributorV1(
             address(this),
+            address(0),
             DistributorConfig({
                 distributionToken: address(distributionToken),
                 participationToken: address(participationToken),
@@ -974,6 +1002,7 @@ contract DistributorV1Test is Test {
                 minParticipation: 1 ether,
                 claimDelaySeconds: claimDelaySeconds,
                 allowFutureEpochParticipation: true,
+                releasePolicy: ReleasePolicy.Anyone,
                 emissionFunction: EmissionFunction({
                     emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
                 }),
@@ -997,6 +1026,143 @@ contract DistributorV1Test is Test {
         vm.prank(participant);
         vm.expectRevert(bytes("not allowlisted"));
         allowlisted.participate(10 ether, Range({from: 0, length: 1}), participant, signature);
+    }
+
+    // --- release policy tests ---
+
+    function _participateOneEpochAndWarp(DistributorV1 _d) internal {
+        participationToken.mint(participant, 10 ether);
+        vm.startPrank(participant);
+        participationToken.approve(address(_d), 10 ether);
+        _d.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
+        vm.stopPrank();
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+    }
+
+    function testReleasePolicyAnyoneAnyoneCanRelease() public {
+        PullingHook hook = new PullingHook(address(participationToken));
+        DistributorV1 d = _createDistributorWithPolicy(ReleasePolicy.Anyone, address(0), address(hook));
+        _participateOneEpochAndWarp(d);
+
+        vm.prank(makeAddr("rando"));
+        d.releaseEpochFunds();
+
+        assertEq(hook.pulled(), 10 ether);
+    }
+
+    function testReleasePolicyFactoryOnlyFactoryCanRelease() public {
+        PullingHook hook = new PullingHook(address(participationToken));
+        MockFactory mockFactory = new MockFactory(makeAddr("factoryOwner"), makeAddr("operator"));
+        DistributorV1 d = _createDistributorWithPolicy(ReleasePolicy.Factory, address(mockFactory), address(hook));
+        _participateOneEpochAndWarp(d);
+
+        vm.prank(address(this)); // creator
+        vm.expectRevert(bytes("only factory"));
+        d.releaseEpochFunds();
+
+        vm.prank(makeAddr("factoryOwner")); // factory owner
+        d.releaseEpochFunds();
+
+        assertEq(hook.pulled(), 10 ether);
+    }
+
+    function testReleasePolicyFactoryReleaseOperatorCanRelease() public {
+        PullingHook hook = new PullingHook(address(participationToken));
+        MockFactory mockFactory = new MockFactory(makeAddr("factoryOwner"), makeAddr("operator"));
+        DistributorV1 d = _createDistributorWithPolicy(ReleasePolicy.Factory, address(mockFactory), address(hook));
+        _participateOneEpochAndWarp(d);
+
+        vm.prank(makeAddr("operator")); // factory's configured release operator
+        d.releaseEpochFunds();
+
+        assertEq(hook.pulled(), 10 ether);
+    }
+
+    function testReleasePolicyCreatorOnlyCreatorCanRelease() public {
+        PullingHook hook = new PullingHook(address(participationToken));
+        DistributorV1 d = _createDistributorWithPolicy(ReleasePolicy.Creator, address(0), address(hook));
+        _participateOneEpochAndWarp(d);
+
+        vm.prank(makeAddr("rando"));
+        vm.expectRevert(bytes("only creator"));
+        d.releaseEpochFunds();
+
+        d.releaseEpochFunds(); // creator = this test contract
+
+        assertEq(hook.pulled(), 10 ether);
+    }
+
+    function testReleasePolicyCreatorOrFactoryBothCanRelease() public {
+        MockFactory mockFactory = new MockFactory(makeAddr("factoryOwner"), makeAddr("operator"));
+
+        PullingHook hook1 = new PullingHook(address(participationToken));
+        DistributorV1 d1 =
+            _createDistributorWithPolicy(ReleasePolicy.CreatorOrFactory, address(mockFactory), address(hook1));
+        PullingHook hook2 = new PullingHook(address(participationToken));
+        DistributorV1 d2 =
+            _createDistributorWithPolicy(ReleasePolicy.CreatorOrFactory, address(mockFactory), address(hook2));
+
+        // both participate in epoch 0 before warping (deploying after warp would violate startTimestamp >= now)
+        participationToken.mint(participant, 20 ether);
+        vm.startPrank(participant);
+        participationToken.approve(address(d1), 10 ether);
+        d1.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
+        participationToken.approve(address(d2), 10 ether);
+        d2.participate(10 ether, Range({from: 0, length: 1}), participant, new bytes(0));
+        vm.stopPrank();
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        vm.prank(makeAddr("rando"));
+        vm.expectRevert(bytes("only creator or factory"));
+        d1.releaseEpochFunds();
+
+        vm.prank(makeAddr("operator")); // factory side
+        d1.releaseEpochFunds();
+
+        assertEq(hook1.pulled(), 10 ether);
+
+        d2.releaseEpochFunds(); // creator = this test contract
+
+        assertEq(hook2.pulled(), 10 ether);
+    }
+
+    function testSetReleasePolicyByCreator() public {
+        DistributorV1 d = _createDistributorWithPolicy(ReleasePolicy.Creator, address(0), address(0));
+
+        vm.prank(makeAddr("rando"));
+        vm.expectRevert(bytes("only creator"));
+        d.setReleasePolicy(ReleasePolicy.Anyone);
+
+        vm.expectEmit(true, true, true, true, address(d));
+        emit DistributorV1.ReleasePolicySet(address(this), ReleasePolicy.Anyone);
+        d.setReleasePolicy(ReleasePolicy.Anyone); // creator = this test contract
+
+        assertEq(uint256(d.RELEASE_POLICY()), uint256(ReleasePolicy.Anyone));
+    }
+
+    function testSetReleasePolicyWhenCurrentPolicyIsFactoryOnlyFactoryCanChange() public {
+        MockFactory mockFactory = new MockFactory(makeAddr("factoryOwner"), makeAddr("operator"));
+        DistributorV1 d = _createDistributorWithPolicy(ReleasePolicy.Factory, address(mockFactory), address(0));
+
+        vm.prank(address(this)); // creator
+        vm.expectRevert(bytes("only factory owner"));
+        d.setReleasePolicy(ReleasePolicy.Anyone);
+
+        vm.prank(makeAddr("operator")); // release operator cannot change the policy either
+        vm.expectRevert(bytes("only factory owner"));
+        d.setReleasePolicy(ReleasePolicy.Anyone);
+
+        vm.prank(makeAddr("factoryOwner"));
+        d.setReleasePolicy(ReleasePolicy.Creator);
+
+        assertEq(uint256(d.RELEASE_POLICY()), uint256(ReleasePolicy.Creator));
+    }
+
+    function testGetContractInfoExposesReleasePolicy() public {
+        GetContractInfoResult memory info = distributor.getContractInfo();
+        assertEq(uint256(info.releasePolicy), uint256(ReleasePolicy.Anyone));
     }
 }
 
@@ -1024,5 +1190,20 @@ contract PullingHook {
             pulled += allowance;
         }
         return "";
+    }
+}
+
+/// @dev minimal factory mock exposing the surface the `Factory` release policy reads
+contract MockFactory {
+    address public owner;
+    address public releaseOperator;
+
+    constructor(address _owner, address _releaseOperator) {
+        owner = _owner;
+        releaseOperator = _releaseOperator;
+    }
+
+    function config() external view returns (uint256, address) {
+        return (0, releaseOperator);
     }
 }

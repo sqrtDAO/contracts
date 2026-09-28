@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {FactoryV1} from "../src/v1/FactoryV1.sol";
 import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory, AddressAndDistributionInfo} from "../src/v1/DistributionV1Factory.sol";
-import {GetContractInfoResult, DistributorConfig} from "../src/v1/DistributorV1.sol";
+import {DistributorConfig, GetContractInfoResult, ReleasePolicy} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Share} from "src/utils/Shares.sol";
@@ -80,6 +80,7 @@ contract FactoryListTest is Test {
             minParticipation: 1 ether,
             claimDelaySeconds: claimDelaySeconds,
             allowFutureEpochParticipation: true,
+            releasePolicy: ReleasePolicy.Anyone,
             emissionFunction: EmissionFunction({
                 // 100 epochs of 1 ether = 100 ether, callers pass totalAmount >= 100 ether
                 emissionContract: emission,

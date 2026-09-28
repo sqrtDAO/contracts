@@ -8,7 +8,7 @@ import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
 import {INonfungiblePositionManager, MintParams} from "../src/external-interfaces/INonfungiblePositionManager.sol";
-import {DistributorV1, DistributorConfig} from "../src/v1/DistributorV1.sol";
+import {DistributorV1, DistributorConfig, ReleasePolicy} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Share} from "src/utils/Shares.sol";
@@ -74,6 +74,7 @@ contract FactoryV1LiquidityTest is Test {
             minParticipation: 1 ether,
             claimDelaySeconds: claimDelaySeconds,
             allowFutureEpochParticipation: true,
+            releasePolicy: ReleasePolicy.Anyone,
             emissionFunction: EmissionFunction({
                 // 100 epochs of 1 ether = 100 ether, matches totalDistribution passed by callers
                 emissionContract: emission,
