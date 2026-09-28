@@ -63,7 +63,7 @@ contract DistributionV1Factory {
         onlyFactory
         returns (address distributorAddress)
     {
-        distributorAddress = address(new DistributorV1(_creator, _config));
+        distributorAddress = address(new DistributorV1(_creator, factory, _config));
         creatorOf[distributorAddress] = _creator;
         distributionList.push(distributorAddress);
         emit NewDistributor(distributorAddress);

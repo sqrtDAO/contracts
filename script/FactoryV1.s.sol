@@ -6,7 +6,7 @@ import {FactoryV1} from "../src/v1/FactoryV1.sol";
 import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
 import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
-import {DistributorV1, DistributorConfig} from "../src/v1/DistributorV1.sol";
+import {DistributorV1, DistributorConfig, ReleasePolicy} from "../src/v1/DistributorV1.sol";
 import {TransferToHook} from "../src/utils/hooks/TransferToHook.sol";
 import {BuyAndBurnHookV3} from "../src/utils/hooks/BuyAndBurnHookV3.sol";
 import {INonfungiblePositionManager} from "../src/external-interfaces/INonfungiblePositionManager.sol";
@@ -44,6 +44,7 @@ contract FactoryV1Script is Script {
         sampleShares[0] = Share({shareBps: 10000, hook: Hook({contractAddress: address(0), callData: ""})});
         DistributorV1 sampleDistributor = new DistributorV1(
             initialOwner,
+            address(0),
             DistributorConfig({
                 distributionToken: address(1),
                 participationToken: address(1),
@@ -52,6 +53,7 @@ contract FactoryV1Script is Script {
                 minParticipation: 0,
                 claimDelaySeconds: 0,
                 allowFutureEpochParticipation: true,
+                releasePolicy: ReleasePolicy.Anyone,
                 shares: sampleShares,
                 emissionFunction: EmissionFunction({
                     emissionContract: fixedEmission, curveConfig: abi.encode(FixedEmissionConfig({amount: 1}))

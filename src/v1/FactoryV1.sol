@@ -21,7 +21,8 @@ contract FactoryV1 is Ownable {
     using SharesLib for Share[];
     using SharesLib for Share;
 
-    uint256 public protocolFeeBps;
+    /// @notice owner-configurable settings (see `FactoryConfig`)
+    FactoryConfig public config;
 
     TransferToHook public immutable TRANSFER_TO_HOOK;
     BuyAndBurnHookV3 public immutable BUY_AND_BURN_HOOK;
@@ -31,6 +32,8 @@ contract FactoryV1 is Ownable {
     DistributionV1Factory public immutable DISTRIBUTOR_FACTORY;
 
     uint24 public constant LIQUIDITY_POOL_FEE = 3000; // 0.3%
+
+    event FactoryConfigSet(address indexed user, uint256 protocolFeeBps, address releaseOperator);
 
     constructor(
         address _initialOwner,
@@ -42,7 +45,7 @@ contract FactoryV1 is Ownable {
         TokenV1Factory _tokenFactory,
         DistributionV1Factory _distributorFactory
     ) Ownable(_initialOwner) {
-        protocolFeeBps = _protocolFeeBps;
+        config.protocolFeeBps = _protocolFeeBps;
         POSITION_MANAGER = _positionManager;
         PERMIT2 = _permit2;
         TRANSFER_TO_HOOK = _transferToHook;
@@ -55,8 +58,10 @@ contract FactoryV1 is Ownable {
 
     // --- sqrt governance ---
 
-    function setProtocolFeeBps(uint256 _protocolFeeBps) public onlyOwner {
-        protocolFeeBps = _protocolFeeBps;
+    /// @notice sets all owner-configurable settings at once (replaces the whole config)
+    function setConfig(FactoryConfig calldata _config) external onlyOwner {
+        config = _config;
+        emit FactoryConfigSet(msg.sender, _config.protocolFeeBps, _config.releaseOperator);
     }
 
     function sweepToken(address _token, address _to) public onlyOwner {
@@ -264,7 +269,7 @@ contract FactoryV1 is Ownable {
         _config.shares = SharesLib.append(
             _config.shares,
             Share({
-                shareBps: protocolFeeBps,
+                shareBps: config.protocolFeeBps,
                 hook: Hook({
                     contractAddress: address(TRANSFER_TO_HOOK),
                     callData: abi.encodeCall(TransferToHook.transferTo, (_config.participationToken, address(this)))
@@ -301,4 +306,12 @@ contract FactoryV1 is Ownable {
 struct Permit2Data {
     IPermit2.PermitTransferFrom permit;
     bytes signature;
+}
+
+/// @param protocolFeeBps protocol fee in basis points e.g. 50 means 0.5%
+/// @param releaseOperator operator (besides the owner) allowed to trigger releases on distributors whose release
+///        policy is `Factory` — read by the distributors directly via the `config()` getter
+struct FactoryConfig {
+    uint256 protocolFeeBps;
+    address releaseOperator;
 }

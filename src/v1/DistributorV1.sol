@@ -23,6 +23,7 @@ contract DistributorV1 is ReentrancyGuard {
     event Claimed(address indexed claimant, uint256 fromEpoch, uint256 numEpochs, uint256 grossAmount, uint256 fee);
     event EpochFundsReleased(uint256 amount, uint256 nextEpochToRelease);
     event ClaimFeeBpsSet(address indexed user, uint256 bps);
+    event ReleasePolicySet(address indexed user, ReleasePolicy policy);
 
     IERC20 public DISTRIBUTION_TOKEN;
     IERC20 public PARTICIPATION_TOKEN;
@@ -36,6 +37,8 @@ contract DistributorV1 is ReentrancyGuard {
     uint256 public NUMBER_OF_EPOCHS;
     uint256 public TOTAL_DISTRIBUTION_AMOUNT;
     address public CREATOR;
+    ReleasePolicy public RELEASE_POLICY;
+    address public FACTORY;
 
     EmissionFunction public emissionFunction;
 
@@ -65,7 +68,10 @@ contract DistributorV1 is ReentrancyGuard {
 
     mapping(address => uint256) public claimFeeBps;
 
-    constructor(address _creator, DistributorConfig memory _config) {
+    /// @param _creator address that gets the CREATOR role of this distributor
+    /// @param _factory address of the factory deploying this distributor (used by the `Factory` release policy)
+    /// @param _config distributor configuration
+    constructor(address _creator, address _factory, DistributorConfig memory _config) {
         require(_config.epochDuration > 0, "epoch duration is zero");
         require(_config.startTimestamp >= block.timestamp, "start timestamp in the past");
         require(_config.numberOfEpochs > 0, "number of epochs is zero");
@@ -95,6 +101,8 @@ contract DistributorV1 is ReentrancyGuard {
         NUMBER_OF_EPOCHS = _config.numberOfEpochs;
         TOTAL_DISTRIBUTION_AMOUNT = _config.totalDistributionAmount;
         CREATOR = _creator;
+        RELEASE_POLICY = _config.releasePolicy;
+        FACTORY = _factory;
         shares = _config.shares;
         emissionFunction = _config.emissionFunction;
 
@@ -136,6 +144,7 @@ contract DistributorV1 is ReentrancyGuard {
             numberOfEpochs: NUMBER_OF_EPOCHS,
             totalDistributionAmount: TOTAL_DISTRIBUTION_AMOUNT,
             creator: CREATOR,
+            releasePolicy: RELEASE_POLICY,
             shares: shares,
             totalUniqueParticipants: totalUniqueParticipants
         });
@@ -330,6 +339,7 @@ contract DistributorV1 is ReentrancyGuard {
      * @dev won't revert if hook fails (just returns false)
      */
     function releaseEpochFunds() public {
+        _requireReleaseAllowed();
         uint256 currEpoch = currentEpoch();
 
         require(nextEpochToRelease < currEpoch, "all passed epochs already claimed");
@@ -348,6 +358,58 @@ contract DistributorV1 is ReentrancyGuard {
 
         emit EpochFundsReleased(fund, nextEpochToRelease);
     }
+
+    /// @notice changes who is allowed to call `releaseEpochFunds`
+    /// @dev while the current policy is `Factory` only the factory owner can change it, otherwise only the creator can
+    function setReleasePolicy(ReleasePolicy _policy) external {
+        if (RELEASE_POLICY == ReleasePolicy.Factory) {
+            require(msg.sender == IFactoryV1(FACTORY).owner(), "only factory owner");
+        } else {
+            require(msg.sender == CREATOR, "only creator");
+        }
+        RELEASE_POLICY = _policy;
+        emit ReleasePolicySet(msg.sender, _policy);
+    }
+
+    function _requireReleaseAllowed() internal view {
+        ReleasePolicy policy = RELEASE_POLICY;
+        if (policy == ReleasePolicy.Anyone) return;
+        if (policy == ReleasePolicy.Creator) {
+            require(msg.sender == CREATOR, "only creator");
+        } else if (policy == ReleasePolicy.Factory) {
+            require(_isFactoryReleaseCaller(), "only factory");
+        } else {
+            require(msg.sender == CREATOR || _isFactoryReleaseCaller(), "only creator or factory");
+        }
+    }
+
+    /// @dev the factory side of the check: the factory owner or the factory's configured release operator
+    function _isFactoryReleaseCaller() internal view returns (bool) {
+        IFactoryV1 factory = IFactoryV1(FACTORY);
+        if (msg.sender == factory.owner()) return true;
+        (, address releaseOperator) = factory.config();
+        return msg.sender == releaseOperator;
+    }
+}
+
+/// @notice minimal view of the factory needed by the `Factory` release policy
+/// @dev implemented implicitly by FactoryV1 through its public state variables
+interface IFactoryV1 {
+    /// @return protocolFeeBps protocol fee in basis points
+    /// @return releaseOperator operator (besides the owner) allowed to trigger releases
+    function config() external view returns (uint256 protocolFeeBps, address releaseOperator);
+
+    /// @return the factory owner
+    function owner() external view returns (address);
+}
+
+/// @notice defines who is allowed to call `releaseEpochFunds`
+/// @dev zero value is `Factory` so zero-initialized configs default to the most restrictive policy
+enum ReleasePolicy {
+    Factory,
+    Creator,
+    CreatorOrFactory,
+    Anyone
 }
 
 /// @param distributionToken address of token you want to distribute
@@ -359,6 +421,7 @@ contract DistributorV1 is ReentrancyGuard {
 /// @param minParticipation minimum amount per-epoch a participant must provide
 /// @param claimDelaySeconds number of seconds a user must wait after an epoch ends before claiming
 /// @param allowFutureEpochParticipation whether users can participate in future epochs
+/// @param releasePolicy who is allowed to call releaseEpochFunds (changeable later, see `setReleasePolicy`)
 /// @param shares split epoch fund to these hook calls after epoch ends
 /// @param emissionFunction calculates reward of an epoch (e.g. curve or linear function)
 /// @param allowlistSigner address that signs participation permits (address(0) = allowlist disabled)
@@ -374,6 +437,7 @@ struct DistributorConfig {
     uint256 minParticipation;
     uint256 claimDelaySeconds;
     bool allowFutureEpochParticipation;
+    ReleasePolicy releasePolicy;
     Share[] shares;
     EmissionFunction emissionFunction;
     address allowlistSigner;
@@ -403,6 +467,7 @@ struct GetContractInfoResult {
     uint256 numberOfEpochs;
     uint256 totalDistributionAmount;
     address creator;
+    ReleasePolicy releasePolicy;
     Share[] shares;
 
     uint256 totalUniqueParticipants;
