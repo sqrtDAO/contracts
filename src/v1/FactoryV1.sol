@@ -33,7 +33,12 @@ contract FactoryV1 is Ownable {
 
     uint24 public constant LIQUIDITY_POOL_FEE = 3000; // 0.3%
 
-    event FactoryConfigSet(address indexed user, uint256 protocolFeeBps, address releaseOperator);
+    error InvalidConfigBps(uint256 protocolFeeBps, uint256 buyBackAndBurnMinBps);
+    error BuyBackAndBurnShareBelowMinBps(uint256 providedBps, uint256 minBps);
+
+    event FactoryConfigSet(
+        address indexed user, uint256 protocolFeeBps, address releaseOperator, uint256 buyBackAndBurnMinBps
+    );
 
     constructor(
         address _initialOwner,
@@ -59,9 +64,17 @@ contract FactoryV1 is Ownable {
     // --- sqrt governance ---
 
     /// @notice sets all owner-configurable settings at once (replaces the whole config)
+    /// @dev reverts if the settings cannot produce a valid launch: both values are capped at 100% and the
+    ///      protocol fee plus the mandatory buy&burn minimum must not exceed 100% together
     function setConfig(FactoryConfig calldata _config) external onlyOwner {
+        if (
+            _config.protocolFeeBps > 10_000 || _config.buyBackAndBurnMinBps > 10_000
+                || _config.protocolFeeBps + _config.buyBackAndBurnMinBps > 10_000
+        ) {
+            revert InvalidConfigBps(_config.protocolFeeBps, _config.buyBackAndBurnMinBps);
+        }
         config = _config;
-        emit FactoryConfigSet(msg.sender, _config.protocolFeeBps, _config.releaseOperator);
+        emit FactoryConfigSet(msg.sender, _config.protocolFeeBps, _config.releaseOperator, _config.buyBackAndBurnMinBps);
     }
 
     function sweepToken(address _token, address _to) public onlyOwner {
@@ -87,6 +100,7 @@ contract FactoryV1 is Ownable {
         returns (address distributorAddress)
     {
         _injectProtocolFeeShare(_config);
+        _requireBuyAndBurnSharesAboveMin(_config.shares);
         distributorAddress = DISTRIBUTOR_FACTORY.createDistributor(msg.sender, _config);
 
         if (_pullIn) {
@@ -195,7 +209,7 @@ contract FactoryV1 is Ownable {
 
     /// @dev this function does three things 1.token creating - 2.liquidity pool creation - 3.distribution creation
     /// @notice _config.distributionToken will be overwrite by new created token just set it to address(0) or something
-    /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 set zero if you don't want to inject buyAndBurn make sure shares sum up to 100% after buyAndBurn injection
+    /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 share routed to the buy&burn hook; reverts if below the owner-configured minimum (config().buyBackAndBurnMinBps) — zero is only allowed while that minimum is zero (then nothing is injected). Make sure shares sum up to 100% after buyAndBurn injection
     /// @notice allocate token for Factory contract (this contract) as much as totalDistributionAmount + _distributionTokenAmountDesired
     ///         with startTime = 0 and duration = 0 so tokens are minted to this contract at deployment
     function createTokenAndLiquidityAndDistribution(
@@ -224,7 +238,7 @@ contract FactoryV1 is Ownable {
         );
 
         // we need to do this here because caller doesn't know address of token
-        if (_buyBackAndBurnShareBps != 0) _injectBuyAndBurnShare(_config, _buyBackAndBurnShareBps);
+        _injectBuyAndBurnShare(_config, _buyBackAndBurnShareBps);
 
         // we don't need to pull-in tokens from user because factory contract has allocation as much as totalDistributionAmount
         distributorAddress = createDistributor(_config, false);
@@ -232,7 +246,7 @@ contract FactoryV1 is Ownable {
 
     /// @dev this function does two things 1.liquidity pool creation - 2.distribution creation for an already existing distribution token
     /// @notice for _config.shares, make sure it sums up to (100% - protocolFeeBps) because createDistributor force injects protocol fee to _config.shares
-    /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 set zero if you don't want to inject buyAndBurn make sure shares sum up to 100% after buyAndBurn injection
+    /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 share routed to the buy&burn hook; reverts if below the owner-configured minimum (config().buyBackAndBurnMinBps) — zero is only allowed while that minimum is zero (then nothing is injected). Make sure shares sum up to 100% after buyAndBurn injection
     /// @notice unlike createTokenAndLiquidityAndDistribution factory contract doesn't hold any allocation of the distribution token
     ///         so sender pays both liquidity distribution tokens and totalDistributionAmount
     /// @param _participationPermit2 empty signature (= no permit2) falls back to allowance-based safeTransferFrom
@@ -257,7 +271,7 @@ contract FactoryV1 is Ownable {
             _distributionPermit2
         );
 
-        if (_buyBackAndBurnShareBps != 0) _injectBuyAndBurnShare(_config, _buyBackAndBurnShareBps);
+        _injectBuyAndBurnShare(_config, _buyBackAndBurnShareBps);
 
         // sender pays the distribution token because factory contract doesn't hold any allocation of it
         distributorAddress = createDistributor(_config, true);
@@ -278,7 +292,13 @@ contract FactoryV1 is Ownable {
         );
     }
 
+    /// @dev mandatory minimum: reverts when the requested share is below `config.buyBackAndBurnMinBps`
+    ///      (zero included, so opting out is only possible while the configured minimum is zero)
     function _injectBuyAndBurnShare(DistributorConfig memory _config, uint256 _shareBps) internal view {
+        uint256 minBps = config.buyBackAndBurnMinBps;
+        if (_shareBps < minBps) revert BuyBackAndBurnShareBelowMinBps(_shareBps, minBps);
+        if (_shareBps == 0) return; // no buy&burn share injected — only reachable when minBps is zero
+
         bytes memory path = abi.encodePacked(_config.participationToken, LIQUIDITY_POOL_FEE, _config.distributionToken);
 
         _config.shares = SharesLib.append(
@@ -291,6 +311,17 @@ contract FactoryV1 is Ownable {
                 })
             })
         );
+    }
+
+    /// @dev distributors can be created directly (not through the launch helpers), where callers hand-craft
+    ///      their own shares — any share routed to the buy&burn hook must still respect the configured minimum
+    function _requireBuyAndBurnSharesAboveMin(Share[] memory _shares) internal view {
+        uint256 minBps = config.buyBackAndBurnMinBps;
+        for (uint256 i; i < _shares.length; ++i) {
+            if (_shares[i].hook.contractAddress == address(BUY_AND_BURN_HOOK) && _shares[i].shareBps < minBps) {
+                revert BuyBackAndBurnShareBelowMinBps(_shares[i].shareBps, minBps);
+            }
+        }
     }
 
     function _emptyPermit2() internal pure returns (Permit2Data memory) {
@@ -311,7 +342,10 @@ struct Permit2Data {
 /// @param protocolFeeBps protocol fee in basis points e.g. 50 means 0.5%
 /// @param releaseOperator operator (besides the owner) allowed to trigger releases on distributors whose release
 ///        policy is `Factory` — read by the distributors directly via the `config()` getter
+/// @param buyBackAndBurnMinBps minimum buy&burn share in basis points every launch must allocate to the buy&burn
+///        hook (zero disables the minimum and also allows launching without any buy&burn share)
 struct FactoryConfig {
     uint256 protocolFeeBps;
     address releaseOperator;
+    uint256 buyBackAndBurnMinBps;
 }

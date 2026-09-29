@@ -387,7 +387,7 @@ contract DistributorV1 is ReentrancyGuard {
     function _isFactoryReleaseCaller() internal view returns (bool) {
         IFactoryV1 factory = IFactoryV1(FACTORY);
         if (msg.sender == factory.owner()) return true;
-        (, address releaseOperator) = factory.config();
+        (, address releaseOperator,) = factory.config();
         return msg.sender == releaseOperator;
     }
 }
@@ -397,7 +397,11 @@ contract DistributorV1 is ReentrancyGuard {
 interface IFactoryV1 {
     /// @return protocolFeeBps protocol fee in basis points
     /// @return releaseOperator operator (besides the owner) allowed to trigger releases
-    function config() external view returns (uint256 protocolFeeBps, address releaseOperator);
+    /// @return buyBackAndBurnMinBps minimum buy&burn share in basis points enforced on launches
+    function config()
+        external
+        view
+        returns (uint256 protocolFeeBps, address releaseOperator, uint256 buyBackAndBurnMinBps);
 
     /// @return the factory owner
     function owner() external view returns (address);
