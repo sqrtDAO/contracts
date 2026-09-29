@@ -2,13 +2,13 @@
 pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
-import {Permit2Data, FactoryV1} from "../src/v1/FactoryV1.sol";
+import {FactoryConfig, Permit2Data, FactoryV1} from "../src/v1/FactoryV1.sol";
 import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
 import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
 import {INonfungiblePositionManager, MintParams} from "../src/external-interfaces/INonfungiblePositionManager.sol";
-import {DistributorV1, DistributorConfig, ReleasePolicy} from "../src/v1/DistributorV1.sol";
+import {DistributorV1, DistributorConfig, GetContractInfoResult, ReleasePolicy} from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Share} from "src/utils/Shares.sol";
@@ -504,6 +504,165 @@ contract FactoryV1LiquidityTest is Test {
         // unused allowances to the position manager were reset to zero
         assertEq(participationToken.allowance(address(partialFactory), address(partialManager)), 0);
         assertEq(distributionToken.allowance(address(partialFactory), address(partialManager)), 0);
+    }
+
+    // --- buy&burn minimum tests ---
+
+    function _setBuyBackBurnMin(uint256 buyBackAndBurnMinBps) internal {
+        vm.prank(owner);
+        factory.setConfig(
+            FactoryConfig({protocolFeeBps: 0, releaseOperator: address(0), buyBackAndBurnMinBps: buyBackAndBurnMinBps})
+        );
+    }
+
+    /// @dev With a configured minimum the buy&burn share is mandatory: below the minimum — zero included — reverts.
+    function testRevertTokenLaunchWhenBuyBurnShareBelowMin() public {
+        _setBuyBackBurnMin(500);
+
+        Allocation[] memory allocations = new Allocation[](1);
+        allocations[0] = Allocation({recipient: address(factory), amount: 150 ether, startTime: 0, duration: 0});
+
+        vm.prank(user);
+        participationToken.approve(address(mockPermit2), 100 ether);
+        Permit2Data memory participationPermit2 = _participationPermit2(100 ether);
+        participationToken.mint(user, 100 ether);
+
+        // zero share
+        DistributorConfig memory config = _buildConfig(100 ether, 0);
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 0, 500));
+        factory.createTokenAndLiquidityAndDistribution(
+            "TestToken", "TST", allocations, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 0, participationPermit2
+        );
+
+        // 499 share — one bps below the minimum
+        config = _buildConfig(100 ether, 499);
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 499, 500));
+        factory.createTokenAndLiquidityAndDistribution(
+            "TestToken", "TST", allocations, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 499, participationPermit2
+        );
+    }
+
+    function testTokenLaunchAtBuyBurnMinSucceeds() public {
+        _setBuyBackBurnMin(500);
+        uint256 buyBackAndBurnShareBps = 500;
+        (, address distributor) = _createTokenAndLiquidityAndDistribution(true, buyBackAndBurnShareBps);
+
+        DistributorV1 d = DistributorV1(distributor);
+        (uint256 userBps,) = d.shares(0);
+        (uint256 bbBps, Hook memory bbHook) = d.shares(1);
+
+        assertEq(userBps, 10_000 - buyBackAndBurnShareBps);
+        assertEq(bbBps, buyBackAndBurnShareBps);
+        assertEq(bbHook.contractAddress, address(factory.BUY_AND_BURN_HOOK()));
+    }
+
+    /// @dev The createDistributor scan also runs through the launch helpers: a hand-crafted
+    ///      buy&burn share below the minimum reverts even though the injected share itself is valid.
+    function testRevertTokenLaunchWithHandCraftedBuyBurnShareBelowMin() public {
+        _setBuyBackBurnMin(500);
+
+        DistributorConfig memory config = _buildConfig(100 ether, 500);
+        // 9390 user + 110 hand-crafted buy&burn (+500 injected buy&burn, +0 fee) sums to 10000
+        config.shares = new Share[](2);
+        config.shares[0] = Share({shareBps: 9390, hook: Hook({contractAddress: address(0), callData: ""})});
+        config.shares[1] =
+            Share({shareBps: 110, hook: Hook({contractAddress: address(factory.BUY_AND_BURN_HOOK()), callData: ""})});
+
+        Allocation[] memory allocations = new Allocation[](1);
+        allocations[0] = Allocation({recipient: address(factory), amount: 150 ether, startTime: 0, duration: 0});
+
+        participationToken.mint(user, 100 ether);
+        vm.prank(user);
+        participationToken.approve(address(factory), 100 ether);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 110, 500));
+        factory.createTokenAndLiquidityAndDistribution(
+            "TestToken", "TST", allocations, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 500, _emptyPermit2()
+        );
+    }
+
+    /// @dev Same mandatory-minimum rules for the liquidity + distribution path of an existing token.
+    function testRevertLiquidityLaunchWhenBuyBurnShareBelowMin() public {
+        _setBuyBackBurnMin(500);
+
+        uint256 participationAmount = 100 ether;
+        uint256 distributionTokenAmountDesired = 50 ether;
+        uint256 totalDistribution = 100 ether;
+
+        participationToken.mint(user, participationAmount);
+        distributionToken.mint(user, distributionTokenAmountDesired + totalDistribution);
+
+        vm.startPrank(user);
+        participationToken.approve(address(mockPermit2), participationAmount);
+        distributionToken.approve(address(mockPermit2), distributionTokenAmountDesired);
+        distributionToken.approve(address(factory), totalDistribution);
+
+        // zero share
+        DistributorConfig memory config = _buildConfig(totalDistribution, 0);
+        config.distributionToken = address(distributionToken);
+        vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 0, 500));
+        factory.createLiquidityAndDistribution(
+            SQRT_PRICE_1_1,
+            participationAmount,
+            distributionTokenAmountDesired,
+            config,
+            0,
+            _participationPermit2(participationAmount),
+            _distributionPermit2(distributionTokenAmountDesired)
+        );
+
+        // 499 share — one bps below the minimum
+        config = _buildConfig(totalDistribution, 499);
+        config.distributionToken = address(distributionToken);
+        vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 499, 500));
+        factory.createLiquidityAndDistribution(
+            SQRT_PRICE_1_1,
+            participationAmount,
+            distributionTokenAmountDesired,
+            config,
+            499,
+            _participationPermit2(participationAmount),
+            _distributionPermit2(distributionTokenAmountDesired)
+        );
+        vm.stopPrank();
+    }
+
+    function testLiquidityLaunchAtBuyBurnMinSucceeds() public {
+        _setBuyBackBurnMin(500);
+        uint256 buyBackAndBurnShareBps = 500;
+        (, address distributor) = _createLiquidityAndDistribution(true, true, buyBackAndBurnShareBps);
+
+        DistributorV1 d = DistributorV1(distributor);
+        (uint256 userBps,) = d.shares(0);
+        (uint256 bbBps, Hook memory bbHook) = d.shares(1);
+
+        assertEq(userBps, 10_000 - buyBackAndBurnShareBps);
+        assertEq(bbBps, buyBackAndBurnShareBps);
+        assertEq(bbHook.contractAddress, address(factory.BUY_AND_BURN_HOOK()));
+    }
+
+    /// @dev Minimum zero + zero passed share = no buy&burn injection at all (opt-out behaviour preserved).
+    function testNoBuyBurnInjectedWhenMinZeroAndShareZero() public {
+        (, address tokenDistributor) = _createTokenAndLiquidityAndDistribution(true, 0);
+        (, address liquidityDistributor) = _createLiquidityAndDistribution(true, true, 0);
+
+        address bbHook = address(factory.BUY_AND_BURN_HOOK());
+        for (uint256 i; i < 2; ++i) {
+            DistributorV1 d = i == 0 ? DistributorV1(tokenDistributor) : DistributorV1(liquidityDistributor);
+
+            // only the 100% user share and the injected 0-bps protocol fee share — no buy&burn share present
+            GetContractInfoResult memory info = d.getContractInfo();
+            assertEq(info.shares.length, 2);
+            assertEq(info.shares[0].shareBps, 10_000);
+            assertEq(info.shares[1].hook.contractAddress, address(factory.TRANSFER_TO_HOOK()));
+
+            for (uint256 j; j < info.shares.length; ++j) {
+                assertNotEq(info.shares[j].hook.contractAddress, bbHook);
+            }
+        }
     }
 }
 

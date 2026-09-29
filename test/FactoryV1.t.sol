@@ -62,10 +62,16 @@ contract FactoryV1Test is Test {
         ReleasePolicy _releasePolicy,
         address _hookAddress
     ) internal returns (address) {
-        // preserve the current release operator — setConfig replaces the whole config
-        (, address currentOperator) = factory.config();
+        // preserve the current release operator and buy&burn minimum — setConfig replaces the whole config
+        (, address currentOperator, uint256 currentBuyBackAndBurnMinBps) = factory.config();
         vm.prank(owner);
-        factory.setConfig(FactoryConfig({protocolFeeBps: feeBps, releaseOperator: currentOperator}));
+        factory.setConfig(
+            FactoryConfig({
+                protocolFeeBps: feeBps,
+                releaseOperator: currentOperator,
+                buyBackAndBurnMinBps: currentBuyBackAndBurnMinBps
+            })
+        );
 
         // user shares must sum to (10000 - feeBps) — factory injects the protocol fee share
         Share[] memory shares = new Share[](1);
@@ -136,7 +142,7 @@ contract FactoryV1Test is Test {
     function testRevertNonOwnerSetConfig() public {
         vm.prank(address(0xDEAD));
         vm.expectRevert();
-        factory.setConfig(FactoryConfig({protocolFeeBps: 99, releaseOperator: address(0)}));
+        factory.setConfig(FactoryConfig({protocolFeeBps: 99, releaseOperator: address(0), buyBackAndBurnMinBps: 0}));
     }
 
     function testSweepTokens() public {
@@ -193,10 +199,16 @@ contract FactoryV1Test is Test {
         _participateOneEpochAndWarp(distributorAddr);
 
         address releaseOperator = makeAddr("operator");
-        // preserve the current fee — setConfig replaces the whole config
-        (uint256 currentFeeBps,) = factory.config();
+        // preserve the current fee and buy&burn minimum — setConfig replaces the whole config
+        (uint256 currentFeeBps,, uint256 currentBuyBackAndBurnMinBps) = factory.config();
         vm.prank(owner);
-        factory.setConfig(FactoryConfig({protocolFeeBps: currentFeeBps, releaseOperator: releaseOperator}));
+        factory.setConfig(
+            FactoryConfig({
+                protocolFeeBps: currentFeeBps,
+                releaseOperator: releaseOperator,
+                buyBackAndBurnMinBps: currentBuyBackAndBurnMinBps
+            })
+        );
 
         // operator calls the distributor directly — the distributor reads config().releaseOperator itself
         vm.prank(releaseOperator);
@@ -216,18 +228,23 @@ contract FactoryV1Test is Test {
     }
 
     function testSetConfigOnlyOwner() public {
-        FactoryConfig memory newConfig = FactoryConfig({protocolFeeBps: 100, releaseOperator: makeAddr("operator")});
+        address operator = makeAddr("operator");
+        FactoryConfig memory newConfig =
+            FactoryConfig({protocolFeeBps: 100, releaseOperator: operator, buyBackAndBurnMinBps: 0});
 
         vm.prank(address(0xDEAD));
         vm.expectRevert();
         factory.setConfig(newConfig);
 
+        vm.expectEmit(true, true, true, true);
+        emit FactoryV1.FactoryConfigSet(owner, 100, operator, 0);
         vm.prank(owner);
         factory.setConfig(newConfig);
 
-        (uint256 feeBps, address releaseOperator) = factory.config();
+        (uint256 feeBps, address releaseOperator, uint256 buyBackAndBurnMinBps) = factory.config();
         assertEq(feeBps, 100);
         assertEq(releaseOperator, newConfig.releaseOperator);
+        assertEq(buyBackAndBurnMinBps, 0);
     }
 
     function testSetReleasePolicyByFactoryOwner() public {
@@ -242,6 +259,134 @@ contract FactoryV1Test is Test {
         DistributorV1(distributorAddr).setReleasePolicy(ReleasePolicy.Anyone);
 
         assertEq(uint256(DistributorV1(distributorAddr).RELEASE_POLICY()), uint256(ReleasePolicy.Anyone));
+    }
+
+    // --- buy&burn minimum tests ---
+
+    function _setFactoryConfig(uint256 feeBps, uint256 buyBackAndBurnMinBps) internal {
+        (, address currentOperator,) = factory.config();
+        vm.prank(owner);
+        factory.setConfig(
+            FactoryConfig({
+                protocolFeeBps: feeBps, releaseOperator: currentOperator, buyBackAndBurnMinBps: buyBackAndBurnMinBps
+            })
+        );
+    }
+
+    function _distributorConfigWith(Share[] memory shares) internal view returns (DistributorConfig memory) {
+        return DistributorConfig({
+            distributionToken: address(distributionToken),
+            participationToken: address(participationToken),
+            epochDuration: epochDuration,
+            startTimestamp: startTimestamp,
+            minParticipation: 1 ether,
+            claimDelaySeconds: claimDelaySeconds,
+            allowFutureEpochParticipation: true,
+            releasePolicy: ReleasePolicy.Anyone,
+            emissionFunction: EmissionFunction({
+                emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: 100 ether}))
+            }),
+            shares: shares,
+            allowlistSigner: address(0),
+            allowlistDeadline: 0,
+            numberOfEpochs: 100,
+            totalDistributionAmount: 10_000 ether
+        });
+    }
+
+    function testRevertSetConfigWithBpsAbove100Percent() public {
+        // protocol fee above 100%
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(FactoryV1.InvalidConfigBps.selector, 10_001, 0));
+        factory.setConfig(FactoryConfig({protocolFeeBps: 10_001, releaseOperator: address(0), buyBackAndBurnMinBps: 0}));
+
+        // buy&burn minimum above 100%
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(FactoryV1.InvalidConfigBps.selector, 0, 10_001));
+        factory.setConfig(FactoryConfig({protocolFeeBps: 0, releaseOperator: address(0), buyBackAndBurnMinBps: 10_001}));
+    }
+
+    function testRevertSetConfigWhenFeePlusBuyBurnMinExceeds100Percent() public {
+        // fee 95.01% + minimum 5% leaves no room for any valid share sum
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(FactoryV1.InvalidConfigBps.selector, 9_501, 500));
+        factory.setConfig(
+            FactoryConfig({protocolFeeBps: 9_501, releaseOperator: address(0), buyBackAndBurnMinBps: 500})
+        );
+
+        // boundary values are accepted
+        _setFactoryConfig(9_500, 500);
+        (uint256 feeBps,, uint256 buyBackAndBurnMinBps) = factory.config();
+        assertEq(feeBps, 9_500);
+        assertEq(buyBackAndBurnMinBps, 500);
+    }
+
+    function testRevertCreateDistributorWithBuyBurnShareBelowMin() public {
+        _setFactoryConfig(0, 500);
+        address bbHook = address(factory.BUY_AND_BURN_HOOK());
+
+        // 9890 user + 110 hand-crafted buy&burn (+0 injected fee) — buy&burn below the 500 minimum
+        Share[] memory shares = new Share[](2);
+        shares[0] = Share({shareBps: 9890, hook: Hook({contractAddress: address(0), callData: ""})});
+        shares[1] = Share({shareBps: 110, hook: Hook({contractAddress: bbHook, callData: ""})});
+
+        distributionToken.mint(user, 10_000 ether);
+        vm.startPrank(user);
+        distributionToken.approve(address(factory), type(uint256).max);
+        vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 110, 500));
+        factory.createDistributor(_distributorConfigWith(shares), true);
+        vm.stopPrank();
+    }
+
+    function testCreateDistributorWithBuyBurnShareAboveMin() public {
+        _setFactoryConfig(0, 500);
+        address bbHook = address(factory.BUY_AND_BURN_HOOK());
+
+        // 9400 user + 600 hand-crafted buy&burn (+0 injected fee) — above the minimum, allowed
+        Share[] memory shares = new Share[](2);
+        shares[0] = Share({shareBps: 9400, hook: Hook({contractAddress: address(0), callData: ""})});
+        shares[1] = Share({shareBps: 600, hook: Hook({contractAddress: bbHook, callData: ""})});
+
+        distributionToken.mint(user, 10_000 ether);
+        vm.startPrank(user);
+        distributionToken.approve(address(factory), type(uint256).max);
+        address distributorAddr = factory.createDistributor(_distributorConfigWith(shares), true);
+        vm.stopPrank();
+
+        (uint256 bbBps, Hook memory bbShareHook) = DistributorV1(distributorAddr).shares(1);
+        assertEq(bbBps, 600);
+        assertEq(bbShareHook.contractAddress, bbHook);
+    }
+
+    function testCreateDistributorWithoutBuyBurnShareAllowedWithMin() public {
+        // min is configured but this distributor has no buy&burn share at all — still allowed
+        _setFactoryConfig(0, 500);
+        address distributorAddr = _createDistributor(0, 10 ether);
+
+        (uint256 userBps,) = DistributorV1(distributorAddr).shares(0);
+        assertEq(userBps, 10_000);
+
+        (,, uint256 buyBackAndBurnMinBps) = factory.config();
+        assertEq(buyBackAndBurnMinBps, 500);
+    }
+
+    function testBuyBurnMinZeroAllowsAnyBuyBurnShare() public {
+        // default config (minimum zero) — any hand-crafted buy&burn share is allowed, like before
+        address bbHook = address(factory.BUY_AND_BURN_HOOK());
+        (,, uint256 buyBackAndBurnMinBps) = factory.config();
+        assertEq(buyBackAndBurnMinBps, 0);
+
+        Share[] memory shares = new Share[](1);
+        shares[0] = Share({shareBps: 10_000, hook: Hook({contractAddress: bbHook, callData: ""})});
+
+        distributionToken.mint(user, 10_000 ether);
+        vm.startPrank(user);
+        distributionToken.approve(address(factory), type(uint256).max);
+        address distributorAddr = factory.createDistributor(_distributorConfigWith(shares), true);
+        vm.stopPrank();
+
+        (uint256 bbBps,) = DistributorV1(distributorAddr).shares(0);
+        assertEq(bbBps, 10_000);
     }
 }
 

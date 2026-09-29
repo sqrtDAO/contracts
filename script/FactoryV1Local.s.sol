@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Script, console} from "forge-std/Script.sol";
-import {FactoryV1} from "../src/v1/FactoryV1.sol";
+import {FactoryConfig, FactoryV1} from "../src/v1/FactoryV1.sol";
 import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {TransferToHook} from "../src/utils/hooks/TransferToHook.sol";
@@ -20,6 +20,7 @@ contract FactoryV1LocalScript is Script {
     function run() external returns (FactoryV1 factory) {
         uint256 pk =
             vm.envOr("PRIVATE_KEY", uint256(0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80));
+        uint256 buyBackAndBurnMinBps = vm.envOr("BUY_BACK_AND_BURN_MIN_BPS", uint256(0));
         vm.startBroadcast(pk);
 
         // EmissionFunctions
@@ -50,6 +51,17 @@ contract FactoryV1LocalScript is Script {
             tokenFactory,
             distributorFactory
         );
+
+        // setConfig replaces the whole config — releaseOperator is still zero-initialized here, so this is a no-op for it
+        if (buyBackAndBurnMinBps != 0) {
+            factory.setConfig(
+                FactoryConfig({
+                    protocolFeeBps: 400, // 4% — keep in sync with the constructor value above
+                    releaseOperator: address(0),
+                    buyBackAndBurnMinBps: buyBackAndBurnMinBps
+                })
+            );
+        }
 
         // fake token to use as participation token
         Allocation[] memory allocation = new Allocation[](1);

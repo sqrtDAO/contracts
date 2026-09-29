@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Script, console} from "forge-std/Script.sol";
-import {FactoryV1} from "../src/v1/FactoryV1.sol";
+import {FactoryConfig, FactoryV1} from "../src/v1/FactoryV1.sol";
 import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
 import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
@@ -23,6 +23,7 @@ contract FactoryV1Script is Script {
         // --- config (override via env vars) ---
         address initialOwner = vm.envOr("INITIAL_OWNER", msg.sender);
         uint256 protocolFeeBps = vm.envOr("PROTOCOL_FEE_BPS", uint256(500)); // 5%
+        uint256 buyBackAndBurnMinBps = vm.envOr("BUY_BACK_AND_BURN_MIN_BPS", uint256(0));
 
         // chain-specific external addresses (Uniswap V3 on the target chain)
         address positionManager = vm.envAddress("POSITION_MANAGER");
@@ -90,6 +91,17 @@ contract FactoryV1Script is Script {
             tokenFactory,
             distributorFactory
         );
+
+        // setConfig replaces the whole config — releaseOperator is still zero-initialized here, so this is a no-op for it
+        if (buyBackAndBurnMinBps != 0) {
+            factory.setConfig(
+                FactoryConfig({
+                    protocolFeeBps: protocolFeeBps,
+                    releaseOperator: address(0),
+                    buyBackAndBurnMinBps: buyBackAndBurnMinBps
+                })
+            );
+        }
 
         console.log("fixedEmission", address(fixedEmission));
         console.log("linearEmission", address(linearEmission));

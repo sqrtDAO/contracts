@@ -1203,7 +1203,7 @@ contract MockFactory {
         releaseOperator = _releaseOperator;
     }
 
-    function config() external view returns (uint256, address) {
-        return (0, releaseOperator);
+    function config() external view returns (uint256, address, uint256) {
+        return (0, releaseOperator, 0);
     }
 }
