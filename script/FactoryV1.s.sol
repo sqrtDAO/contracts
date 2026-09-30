@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {Script, console} from "forge-std/Script.sol";
 import {FactoryConfig, FactoryV1} from "../src/v1/FactoryV1.sol";
-import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
+import {TokenV1, Allocation, TokenConfig} from "../src/v1/TokenV1.sol";
 import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {DistributorV1, DistributorConfig, ReleasePolicy} from "../src/v1/DistributorV1.sol";
@@ -74,7 +74,14 @@ contract FactoryV1Script is Script {
         // TokenV1Factory are auto-verified against this one)
         Allocation[] memory sampleAllocations = new Allocation[](1);
         sampleAllocations[0] = Allocation({recipient: address(1), amount: 1, startTime: 0, duration: 0});
-        TokenV1 sampleToken = new TokenV1("Sample Token", "SAMPLE", sampleAllocations, initialOwner, new MetadataEntry[](0), true);
+        TokenConfig memory sampleTokenConfig = TokenConfig({
+            name: "Sample Token",
+            symbol: "SAMPLE",
+            allocations: sampleAllocations,
+            initialMetadata: new MetadataEntry[](0),
+            metadataEditable: true
+        });
+        TokenV1 sampleToken = new TokenV1(sampleTokenConfig, initialOwner);
 
         // Hooks
         TransferToHook transferToHook = new TransferToHook();

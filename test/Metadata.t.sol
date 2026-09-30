@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
-import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
+import {TokenV1, Allocation, TokenConfig} from "../src/v1/TokenV1.sol";
 import {DistributorV1, DistributorConfig, GetContractInfoResult, ReleasePolicy} from "../src/v1/DistributorV1.sol";
 import {IERC7729, MetadataEntry, MetadataStore} from "../src/utils/Metadata.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
@@ -59,7 +59,16 @@ contract MetadataTest is Test {
     function _token(MetadataEntry[] memory _initialMetadata, bool _editable, address _creator) internal returns (TokenV1) {
         Allocation[] memory allocs = new Allocation[](1);
         allocs[0] = Allocation({recipient: address(this), amount: 1, startTime: 0, duration: 0});
-        return new TokenV1("T", "S", allocs, _creator, _initialMetadata, _editable);
+        return new TokenV1(
+            TokenConfig({
+                name: "T",
+                symbol: "S",
+                allocations: allocs,
+                initialMetadata: _initialMetadata,
+                metadataEditable: _editable
+            }),
+            _creator
+        );
     }
 
     function _distributor(address _creator, MetadataEntry[] memory _initialMetadata, bool _editable)
@@ -478,7 +487,15 @@ contract MetadataTest is Test {
         allocs[0] = Allocation({recipient: user, amount: 1 ether, startTime: 0, duration: 0});
 
         vm.prank(user);
-        address tokenAddress = factory.createToken("T", "S", allocs, _entries(keys, values), true);
+        address tokenAddress = factory.createToken(
+            TokenConfig({
+                name: "T",
+                symbol: "S",
+                allocations: allocs,
+                initialMetadata: _entries(keys, values),
+                metadataEditable: true
+            })
+        );
 
         TokenV1 token = TokenV1(tokenAddress);
         assertEq(token.owner(), user);

@@ -17,10 +17,9 @@ deploy:
 
 new-token-sepolia:
 	cast send 0xf33e6214867Ee20fbB3E9E01C1195243280036fB \
-	  	"createToken(string,string,tuple(address,uint256)[],tuple(string,string)[],bool)" \
-  		"Root" "ROOT" \
-  		"[(0x068842FCf7D6EB04255fe8BeB7224C0FE0506b92,100000000000000000000000000)]" \
-  		"[]" "true" \
+	  	"createToken((string,string,(address,uint256,uint256,uint256)[],(string,string)[],bool),address)" \
+  		'("Root", "ROOT", [(0x068842FCf7D6EB04255fe8BeB7224C0FE0506b92,100000000000000000000000000,0,0)], [], true)' \
+  		$(or $(CREATOR_ADDRESS),0x068842FCf7D6EB04255fe8BeB7224C0FE0506b92) \
   		--rpc-url $(RPC_URL) \
 		--etherscan-api-key $(ETHERSCAN_API_KEY) \
   		--private-key $(PRIVATE_KEY)

@@ -14,7 +14,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {FixedEmission} from "../src/utils/emission-function/FixedEmission.sol";
 import {LinearEmission} from "../src/utils/emission-function/LinearEmission.sol";
 import {ExponentialEmission} from "../src/utils/emission-function/ExponentialEmission.sol";
-import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
+import {TokenV1, Allocation, TokenConfig} from "../src/v1/TokenV1.sol";
 import {MetadataEntry} from "../src/utils/Metadata.sol";
 
 contract FactoryV1LocalScript is Script {
@@ -72,7 +72,16 @@ contract FactoryV1LocalScript is Script {
             startTime: 0,
             duration: 0
         });
-        TokenV1 fakeUsd = new TokenV1("Fake USD", "FUSD", allocation, msg.sender, new MetadataEntry[](0), true);
+        TokenV1 fakeUsd = new TokenV1(
+            TokenConfig({
+                name: "Fake USD",
+                symbol: "FUSD",
+                allocations: allocation,
+                initialMetadata: new MetadataEntry[](0),
+                metadataEditable: true
+            }),
+            msg.sender
+        );
 
         console.log("fakeUsd", address(fakeUsd));
 

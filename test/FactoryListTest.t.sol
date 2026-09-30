@@ -11,6 +11,7 @@ import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.
 import {Share} from "src/utils/Shares.sol";
 import {Hook} from "src/utils/Hook.sol";
 import {Allocation} from "../src/v1/TokenV1.sol";
+import {TokenConfig} from "../src/v1/TokenV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {MetadataEntry} from "../src/utils/Metadata.sol";
@@ -59,10 +60,20 @@ contract FactoryListTest is Test {
         );
     }
 
-    function _createToken() internal returns (address) {
+    function _tokenConfig() internal view returns (TokenConfig memory) {
         Allocation[] memory allocs = new Allocation[](1);
         allocs[0] = Allocation({recipient: address(this), amount: 1 ether, startTime: 0, duration: 0});
-        return factory.createToken("T", "T", allocs, new MetadataEntry[](0), true);
+        return TokenConfig({
+            name: "T",
+            symbol: "T",
+            allocations: allocs,
+            initialMetadata: new MetadataEntry[](0),
+            metadataEditable: true
+        });
+    }
+
+    function _createToken() internal returns (address) {
+        return factory.createToken(_tokenConfig());
     }
 
     function _createDistributor(uint256 totalAmount) internal returns (address) {
@@ -289,7 +300,7 @@ contract FactoryListTest is Test {
         allocs[0] = Allocation({recipient: address(this), amount: 1 ether, startTime: 0, duration: 0});
 
         vm.prank(user);
-        address token = factory.createToken("T", "T", allocs, new MetadataEntry[](0), true);
+        address token = factory.createToken(_tokenConfig());
 
         assertEq(tokenFactory.creatorOf(token), user);
     }

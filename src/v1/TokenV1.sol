@@ -13,33 +13,24 @@ contract TokenV1 is ERC20, MetadataStore {
     mapping(address => Allocation) public share;
 
     /**
-     * @param _name          Token name
-     * @param _symbol        Token symbol
-     * @param _allocations    Array of initial allocation structs (recipient + amount + vesting)
-     * @param _initialOwner   Launch caller; becomes the owner and the only address allowed to edit/lock metadata
-     *                        (transferable via `transferOwnership`, see `Ownable`)
-     * @param _initialMetadata On-chain metadata pairs written at deployment (reserved key "metadata"
-     *                        holds the metadata URI/JSON returned by `metadata()`, `contractURI()`, `tokenURI()`)
-     * @param _metadataEditable false = metadata is frozen forever after deployment
+     * @param _config        Token configuration (see `TokenConfig`)
+     * @param _initialOwner  Launch caller; becomes the owner and the only address allowed to edit/lock metadata
+     *                       (transferable via `transferOwnership`, see `Ownable`)
      */
-    constructor(
-        string memory _name,
-        string memory _symbol,
-        Allocation[] memory _allocations,
-        address _initialOwner,
-        MetadataEntry[] memory _initialMetadata,
-        bool _metadataEditable
-    ) ERC20(_name, _symbol) MetadataStore(_initialOwner, _initialMetadata, _metadataEditable) {
-        require(_allocations.length > 0, "No allocations");
-        for (uint256 i = 0; i < _allocations.length; i++) {
-            require(_allocations[i].recipient != address(0), "Invalid recipient");
-            require(share[_allocations[i].recipient].recipient == address(0), "Duplicate recipient");
-            share[_allocations[i].recipient] = _allocations[i];
+    constructor(TokenConfig memory _config, address _initialOwner)
+        ERC20(_config.name, _config.symbol)
+        MetadataStore(_initialOwner, _config.initialMetadata, _config.metadataEditable)
+    {
+        require(_config.allocations.length > 0, "No allocations");
+        for (uint256 i = 0; i < _config.allocations.length; i++) {
+            require(_config.allocations[i].recipient != address(0), "Invalid recipient");
+            require(share[_config.allocations[i].recipient].recipient == address(0), "Duplicate recipient");
+            share[_config.allocations[i].recipient] = _config.allocations[i];
             // whatever is already vested at deployment is minted right away
-            uint256 vested = _vestedAt(_allocations[i], block.timestamp);
+            uint256 vested = _vestedAt(_config.allocations[i], block.timestamp);
             if (vested > 0) {
-                alreadyClaimed[_allocations[i].recipient] = vested;
-                _mint(_allocations[i].recipient, vested);
+                alreadyClaimed[_config.allocations[i].recipient] = vested;
+                _mint(_config.allocations[i].recipient, vested);
             }
         }
     }
@@ -111,4 +102,18 @@ struct VestingInfo {
     uint256 startTime;
     uint256 duration;
     uint256 fullyVestedAt;
+}
+
+/// @param name token name
+/// @param symbol token symbol
+/// @param allocations array of initial allocation structs (recipient + amount + vesting)
+/// @param initialMetadata on-chain metadata pairs written at deployment (see `MetadataStore`;
+///        the reserved "metadata" key holds the URI/JSON returned by `metadata()`, `contractURI()`, `tokenURI()`)
+/// @param metadataEditable false = metadata is frozen forever after deployment
+struct TokenConfig {
+    string name;
+    string symbol;
+    Allocation[] allocations;
+    MetadataEntry[] initialMetadata;
+    bool metadataEditable;
 }

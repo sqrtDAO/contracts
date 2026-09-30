@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {FactoryConfig, Permit2Data, FactoryV1} from "../src/v1/FactoryV1.sol";
-import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
+import {TokenV1, Allocation, TokenConfig} from "../src/v1/TokenV1.sol";
 import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
@@ -122,6 +122,17 @@ contract FactoryV1LiquidityTest is Test {
         });
     }
 
+    /// @dev Builds the default token config used by the launch helpers.
+    function _tokenConfig(Allocation[] memory allocations) internal pure returns (TokenConfig memory) {
+        return TokenConfig({
+            name: "TestToken",
+            symbol: "TST",
+            allocations: allocations,
+            initialMetadata: new MetadataEntry[](0),
+            metadataEditable: true
+        });
+    }
+
     /// @dev Runs createTokenAndLiquidityAndDistribution end-to-end.
     /// usePermit2 pulls the participation token via Permit2 signature instead of allowance.
     function _createTokenAndLiquidityAndDistribution(bool usePermit2, uint256 buyBackAndBurnShareBps)
@@ -158,11 +169,7 @@ contract FactoryV1LiquidityTest is Test {
 
         vm.prank(user);
         (token, distributor) = factory.createTokenAndLiquidityAndDistribution(
-            "TestToken",
-            "TST",
-            allocations,
-            new MetadataEntry[](0),
-            true,
+            _tokenConfig(allocations),
             SQRT_PRICE_1_1,
             participationAmount,
             distributionTokenAmountDesired,
@@ -241,11 +248,7 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert();
         factory.createTokenAndLiquidityAndDistribution(
-            "TestToken",
-            "TST",
-            allocations,
-            new MetadataEntry[](0),
-            true,
+            _tokenConfig(allocations),
             SQRT_PRICE_1_1,
             participationAmount,
             distributionTokenAmountDesired,
@@ -539,7 +542,7 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 0, 500));
         factory.createTokenAndLiquidityAndDistribution(
-            "TestToken", "TST", allocations, new MetadataEntry[](0), true, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 0, participationPermit2
+            _tokenConfig(allocations), SQRT_PRICE_1_1, 100 ether, 50 ether, config, 0, participationPermit2
         );
 
         // 499 share — one bps below the minimum
@@ -547,7 +550,7 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 499, 500));
         factory.createTokenAndLiquidityAndDistribution(
-            "TestToken", "TST", allocations, new MetadataEntry[](0), true, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 499, participationPermit2
+            _tokenConfig(allocations), SQRT_PRICE_1_1, 100 ether, 50 ether, config, 499, participationPermit2
         );
     }
 
@@ -587,7 +590,7 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 110, 500));
         factory.createTokenAndLiquidityAndDistribution(
-            "TestToken", "TST", allocations, new MetadataEntry[](0), true, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 500, _emptyPermit2()
+            _tokenConfig(allocations), SQRT_PRICE_1_1, 100 ether, 50 ether, config, 500, _emptyPermit2()
         );
     }
 
