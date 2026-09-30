@@ -56,7 +56,7 @@ contract DistributionV1Factory {
         factory = _factory;
     }
 
-    /// @notice deploys a new DistributorV1 with `_creator` as its CREATOR
+    /// @notice deploys a new DistributorV1 with `_creator` as its owner (see `Ownable`)
     /// @return distributorAddress address of the deployed distributor
     function createDistributor(address _creator, DistributorConfig memory _config)
         external

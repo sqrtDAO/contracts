@@ -15,6 +15,7 @@ import {INonfungiblePositionManager} from "../external-interfaces/INonfungiblePo
 import {SharesLib, Share} from "src/utils/Shares.sol";
 import {Hook} from "src/utils/Hook.sol";
 import {IPermit2} from "../external-interfaces/IPermit2.sol";
+import {MetadataEntry} from "src/utils/Metadata.sol";
 
 contract FactoryV1 is Ownable {
     using SafeERC20 for IERC20;
@@ -84,11 +85,16 @@ contract FactoryV1 is Ownable {
 
     // --- factory functions ---
 
-    function createToken(string memory _name, string memory _symbol, Allocation[] memory _allocations)
-        public
-        returns (address tokenAddress)
-    {
-        tokenAddress = TOKEN_FACTORY.createToken(_name, _symbol, _allocations, msg.sender);
+    /// @param _initialMetadata on-chain metadata pairs written to the token at deployment (see `MetadataStore`)
+    /// @param _metadataEditable false = token metadata is frozen forever after deployment
+    function createToken(
+        string memory _name,
+        string memory _symbol,
+        Allocation[] memory _allocations,
+        MetadataEntry[] memory _initialMetadata,
+        bool _metadataEditable
+    ) public returns (address tokenAddress) {
+        tokenAddress = TOKEN_FACTORY.createToken(_name, _symbol, _allocations, _initialMetadata, _metadataEditable, msg.sender);
     }
 
     /// @dev Make sure you give allowance to Factory contract before call this
@@ -212,10 +218,14 @@ contract FactoryV1 is Ownable {
     /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 share routed to the buy&burn hook; reverts if below the owner-configured minimum (config().buyBackAndBurnMinBps) — zero is only allowed while that minimum is zero (then nothing is injected). Make sure shares sum up to 100% after buyAndBurn injection
     /// @notice allocate token for Factory contract (this contract) as much as totalDistributionAmount + _distributionTokenAmountDesired
     ///         with startTime = 0 and duration = 0 so tokens are minted to this contract at deployment
+    /// @param _tokenInitialMetadata on-chain metadata pairs written to the token at deployment (see `MetadataStore`)
+    /// @param _tokenMetadataEditable false = token metadata is frozen forever after deployment
     function createTokenAndLiquidityAndDistribution(
         string memory _tokenName,
         string memory _tokenSymbol,
         Allocation[] memory _tokenAllocations,
+        MetadataEntry[] memory _tokenInitialMetadata,
+        bool _tokenMetadataEditable,
         uint160 _sqrtPriceX96,
         uint256 _participationTokenAmountDesired,
         uint256 _distributionTokenAmountDesired,
@@ -223,7 +233,7 @@ contract FactoryV1 is Ownable {
         uint256 _buyBackAndBurnShareBps,
         Permit2Data calldata _participationPermit2
     ) public returns (address tokenAddress, address distributorAddress) {
-        tokenAddress = createToken(_tokenName, _tokenSymbol, _tokenAllocations);
+        tokenAddress = createToken(_tokenName, _tokenSymbol, _tokenAllocations, _tokenInitialMetadata, _tokenMetadataEditable);
         _config.distributionToken = tokenAddress;
 
         createPoolAndAddLiquidity(

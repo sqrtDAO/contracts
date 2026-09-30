@@ -9,6 +9,7 @@ import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
 import {INonfungiblePositionManager, MintParams} from "../src/external-interfaces/INonfungiblePositionManager.sol";
 import {DistributorV1, DistributorConfig, GetContractInfoResult, ReleasePolicy} from "../src/v1/DistributorV1.sol";
+import {MetadataEntry} from "../src/utils/Metadata.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Share} from "src/utils/Shares.sol";
@@ -84,7 +85,9 @@ contract FactoryV1LiquidityTest is Test {
             allowlistSigner: address(0),
             allowlistDeadline: 0,
             numberOfEpochs: 100,
-            totalDistributionAmount: totalDistribution
+            totalDistributionAmount: totalDistribution,
+            initialMetadata: new MetadataEntry[](0),
+            metadataEditable: true
         });
     }
 
@@ -158,6 +161,8 @@ contract FactoryV1LiquidityTest is Test {
             "TestToken",
             "TST",
             allocations,
+            new MetadataEntry[](0),
+            true,
             SQRT_PRICE_1_1,
             participationAmount,
             distributionTokenAmountDesired,
@@ -239,6 +244,8 @@ contract FactoryV1LiquidityTest is Test {
             "TestToken",
             "TST",
             allocations,
+            new MetadataEntry[](0),
+            true,
             SQRT_PRICE_1_1,
             participationAmount,
             distributionTokenAmountDesired,
@@ -532,7 +539,7 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 0, 500));
         factory.createTokenAndLiquidityAndDistribution(
-            "TestToken", "TST", allocations, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 0, participationPermit2
+            "TestToken", "TST", allocations, new MetadataEntry[](0), true, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 0, participationPermit2
         );
 
         // 499 share — one bps below the minimum
@@ -540,7 +547,7 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 499, 500));
         factory.createTokenAndLiquidityAndDistribution(
-            "TestToken", "TST", allocations, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 499, participationPermit2
+            "TestToken", "TST", allocations, new MetadataEntry[](0), true, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 499, participationPermit2
         );
     }
 
@@ -580,7 +587,7 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 110, 500));
         factory.createTokenAndLiquidityAndDistribution(
-            "TestToken", "TST", allocations, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 500, _emptyPermit2()
+            "TestToken", "TST", allocations, new MetadataEntry[](0), true, SQRT_PRICE_1_1, 100 ether, 50 ether, config, 500, _emptyPermit2()
         );
     }
 

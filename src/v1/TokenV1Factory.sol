@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import {TokenV1, Allocation} from "./TokenV1.sol";
+import {MetadataEntry} from "../utils/Metadata.sol";
 
 /// @title TokenV1Factory
 /// @notice Deploys TokenV1 instances. Kept as a separate contract so FactoryV1
@@ -51,13 +52,18 @@ contract TokenV1Factory {
 
     /// @notice deploys a new TokenV1
     /// @param _creator the address that requested the token creation (the end user, not this factory)
+    /// @param _initialMetadata on-chain metadata pairs written at deployment (see `MetadataStore`)
+    /// @param _metadataEditable false = metadata is frozen forever after deployment
     /// @return tokenAddress address of the deployed token
-    function createToken(string memory _name, string memory _symbol, Allocation[] memory _allocations, address _creator)
-        external
-        onlyFactory
-        returns (address tokenAddress)
-    {
-        tokenAddress = address(new TokenV1(_name, _symbol, _allocations));
+    function createToken(
+        string memory _name,
+        string memory _symbol,
+        Allocation[] memory _allocations,
+        MetadataEntry[] memory _initialMetadata,
+        bool _metadataEditable,
+        address _creator
+    ) external onlyFactory returns (address tokenAddress) {
+        tokenAddress = address(new TokenV1(_name, _symbol, _allocations, _creator, _initialMetadata, _metadataEditable));
         creatorOf[tokenAddress] = _creator;
         tokenList.push(tokenAddress);
         emit NewToken(tokenAddress);

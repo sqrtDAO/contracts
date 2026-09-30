@@ -16,6 +16,7 @@ import {LinearEmission} from "../src/utils/emission-function/LinearEmission.sol"
 import {ExponentialEmission} from "../src/utils/emission-function/ExponentialEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Share} from "../src/utils/Shares.sol";
+import {MetadataEntry} from "../src/utils/Metadata.sol";
 import {Hook} from "../src/utils/Hook.sol";
 
 contract FactoryV1Script is Script {
@@ -62,7 +63,9 @@ contract FactoryV1Script is Script {
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
                 numberOfEpochs: 1,
-                totalDistributionAmount: 1
+                totalDistributionAmount: 1,
+                initialMetadata: new MetadataEntry[](0),
+                metadataEditable: true
             })
         );
 
@@ -71,7 +74,7 @@ contract FactoryV1Script is Script {
         // TokenV1Factory are auto-verified against this one)
         Allocation[] memory sampleAllocations = new Allocation[](1);
         sampleAllocations[0] = Allocation({recipient: address(1), amount: 1, startTime: 0, duration: 0});
-        TokenV1 sampleToken = new TokenV1("Sample Token", "SAMPLE", sampleAllocations);
+        TokenV1 sampleToken = new TokenV1("Sample Token", "SAMPLE", sampleAllocations, initialOwner, new MetadataEntry[](0), true);
 
         // Hooks
         TransferToHook transferToHook = new TransferToHook();

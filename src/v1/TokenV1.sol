@@ -2,8 +2,10 @@
 pragma solidity 0.8.30;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import {IERC7729, MetadataEntry, MetadataStore} from "src/utils/Metadata.sol";
 
-contract TokenV1 is ERC20 {
+contract TokenV1 is ERC20, MetadataStore {
     /// @notice (recipient => amount already minted through claim)
     mapping(address => uint256) public alreadyClaimed;
 
@@ -14,8 +16,20 @@ contract TokenV1 is ERC20 {
      * @param _name          Token name
      * @param _symbol        Token symbol
      * @param _allocations    Array of initial allocation structs (recipient + amount + vesting)
+     * @param _initialOwner   Launch caller; becomes the owner and the only address allowed to edit/lock metadata
+     *                        (transferable via `transferOwnership`, see `Ownable`)
+     * @param _initialMetadata On-chain metadata pairs written at deployment (reserved key "metadata"
+     *                        holds the metadata URI/JSON returned by `metadata()`, `contractURI()`, `tokenURI()`)
+     * @param _metadataEditable false = metadata is frozen forever after deployment
      */
-    constructor(string memory _name, string memory _symbol, Allocation[] memory _allocations) ERC20(_name, _symbol) {
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        Allocation[] memory _allocations,
+        address _initialOwner,
+        MetadataEntry[] memory _initialMetadata,
+        bool _metadataEditable
+    ) ERC20(_name, _symbol) MetadataStore(_initialOwner, _initialMetadata, _metadataEditable) {
         require(_allocations.length > 0, "No allocations");
         for (uint256 i = 0; i < _allocations.length; i++) {
             require(_allocations[i].recipient != address(0), "Invalid recipient");
@@ -70,6 +84,16 @@ contract TokenV1 is ERC20 {
             return _alloc.amount;
         }
         return (_alloc.amount * elapsed) / _alloc.duration;
+    }
+
+    /// @notice EIP-1046 token metadata getter — reserved `"metadata"` key value, same as `metadata()`
+    function tokenURI() external view returns (string memory) {
+        return metadata();
+    }
+
+    /// @notice ERC-165: supports ERC-165 itself and the ERC-7729 token metadata interface
+    function supportsInterface(bytes4 _interfaceId) external pure returns (bool) {
+        return _interfaceId == type(IERC165).interfaceId || _interfaceId == type(IERC7729).interfaceId;
     }
 }
 

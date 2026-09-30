@@ -13,6 +13,7 @@ import {Hook} from "src/utils/Hook.sol";
 import {Allocation} from "../src/v1/TokenV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {MetadataEntry} from "../src/utils/Metadata.sol";
 import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
 import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
 import {INonfungiblePositionManager} from "../src/external-interfaces/INonfungiblePositionManager.sol";
@@ -61,7 +62,7 @@ contract FactoryListTest is Test {
     function _createToken() internal returns (address) {
         Allocation[] memory allocs = new Allocation[](1);
         allocs[0] = Allocation({recipient: address(this), amount: 1 ether, startTime: 0, duration: 0});
-        return factory.createToken("T", "T", allocs);
+        return factory.createToken("T", "T", allocs, new MetadataEntry[](0), true);
     }
 
     function _createDistributor(uint256 totalAmount) internal returns (address) {
@@ -90,7 +91,9 @@ contract FactoryListTest is Test {
             allowlistSigner: address(0),
             allowlistDeadline: 0,
             numberOfEpochs: 100,
-            totalDistributionAmount: totalAmount
+            totalDistributionAmount: totalAmount,
+            initialMetadata: new MetadataEntry[](0),
+            metadataEditable: true
         });
 
         vm.startPrank(user);
@@ -231,7 +234,7 @@ contract FactoryListTest is Test {
         assertEq(info.numberOfEpochs, 100);
         assertEq(info.totalDistributionAmount, 100 ether);
         assertEq(info.remainingRewards, 100 ether); // funded by the factory pull-in
-        assertEq(info.creator, user);
+        assertEq(info.owner, user);
         assertEq(info.totalUniqueParticipants, 0);
         assertEq(info.shares.length, 2); // user share + injected protocol fee share
         assertEq(info.shares[0].shareBps, 10000);
@@ -286,7 +289,7 @@ contract FactoryListTest is Test {
         allocs[0] = Allocation({recipient: address(this), amount: 1 ether, startTime: 0, duration: 0});
 
         vm.prank(user);
-        address token = factory.createToken("T", "T", allocs);
+        address token = factory.createToken("T", "T", allocs, new MetadataEntry[](0), true);
 
         assertEq(tokenFactory.creatorOf(token), user);
     }

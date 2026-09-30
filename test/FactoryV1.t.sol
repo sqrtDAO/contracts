@@ -12,6 +12,7 @@ import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Share} from "src/utils/Shares.sol";
 import {Hook} from "src/utils/Hook.sol";
+import {MetadataEntry} from "../src/utils/Metadata.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
@@ -93,7 +94,9 @@ contract FactoryV1Test is Test {
             allowlistSigner: address(0),
             allowlistDeadline: 0,
             numberOfEpochs: 100,
-            totalDistributionAmount: 10_000 ether
+            totalDistributionAmount: 10_000 ether,
+            initialMetadata: new MetadataEntry[](0),
+            metadataEditable: true
         });
 
         vm.prank(user);
@@ -290,7 +293,9 @@ contract FactoryV1Test is Test {
             allowlistSigner: address(0),
             allowlistDeadline: 0,
             numberOfEpochs: 100,
-            totalDistributionAmount: 10_000 ether
+            totalDistributionAmount: 10_000 ether,
+            initialMetadata: new MetadataEntry[](0),
+            metadataEditable: true
         });
     }
 

@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Share, SharesLib} from "src/utils/Shares.sol";
+import {MetadataEntry, MetadataStore} from "src/utils/Metadata.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -12,7 +13,7 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 /// @title Distributor
 /// @notice Base template for distributor contracts that perform token transfers to recipients.
 /// @dev Extend this contract for versioned implementations like `DistributorV1`.
-contract DistributorV1 is ReentrancyGuard {
+contract DistributorV1 is ReentrancyGuard, MetadataStore {
     using SafeERC20 for IERC20;
     using SharesLib for Share;
     using SharesLib for Share[];
@@ -36,7 +37,6 @@ contract DistributorV1 is ReentrancyGuard {
     uint256 public ALLOWLIST_DEADLINE;
     uint256 public NUMBER_OF_EPOCHS;
     uint256 public TOTAL_DISTRIBUTION_AMOUNT;
-    address public CREATOR;
     ReleasePolicy public RELEASE_POLICY;
     address public FACTORY;
 
@@ -68,10 +68,13 @@ contract DistributorV1 is ReentrancyGuard {
 
     mapping(address => uint256) public claimFeeBps;
 
-    /// @param _creator address that gets the CREATOR role of this distributor
+    /// @param _creator address that becomes the owner of this distributor (see `Ownable`)
     /// @param _factory address of the factory deploying this distributor (used by the `Factory` release policy)
     /// @param _config distributor configuration
-    constructor(address _creator, address _factory, DistributorConfig memory _config) {
+    constructor(address _creator, address _factory, DistributorConfig memory _config)
+        MetadataStore(_creator, _config.initialMetadata, _config.metadataEditable)
+        ReentrancyGuard()
+    {
         require(_config.epochDuration > 0, "epoch duration is zero");
         require(_config.startTimestamp >= block.timestamp, "start timestamp in the past");
         require(_config.numberOfEpochs > 0, "number of epochs is zero");
@@ -100,7 +103,6 @@ contract DistributorV1 is ReentrancyGuard {
         ALLOWLIST_DEADLINE = _config.allowlistDeadline;
         NUMBER_OF_EPOCHS = _config.numberOfEpochs;
         TOTAL_DISTRIBUTION_AMOUNT = _config.totalDistributionAmount;
-        CREATOR = _creator;
         RELEASE_POLICY = _config.releasePolicy;
         FACTORY = _factory;
         shares = _config.shares;
@@ -143,10 +145,11 @@ contract DistributorV1 is ReentrancyGuard {
             remainingRewards: DISTRIBUTION_TOKEN.balanceOf(address(this)),
             numberOfEpochs: NUMBER_OF_EPOCHS,
             totalDistributionAmount: TOTAL_DISTRIBUTION_AMOUNT,
-            creator: CREATOR,
+            owner: owner(),
             releasePolicy: RELEASE_POLICY,
             shares: shares,
-            totalUniqueParticipants: totalUniqueParticipants
+            totalUniqueParticipants: totalUniqueParticipants,
+            metadataLocked: metadataLocked
         });
     }
 
@@ -360,12 +363,14 @@ contract DistributorV1 is ReentrancyGuard {
     }
 
     /// @notice changes who is allowed to call `releaseEpochFunds`
-    /// @dev while the current policy is `Factory` only the factory owner can change it, otherwise only the creator can
+    /// @dev while the current policy is `Factory` only the factory owner can change it, otherwise only the owner can
+    /// @dev WARNING: the owner is transferable (`Ownable`) — transferring/renouncing ownership moves this
+    ///      authority; `renounceOwnership()` makes the `Creator`/`CreatorOrFactory` policies unable to release forever
     function setReleasePolicy(ReleasePolicy _policy) external {
         if (RELEASE_POLICY == ReleasePolicy.Factory) {
             require(msg.sender == IFactoryV1(FACTORY).owner(), "only factory owner");
         } else {
-            require(msg.sender == CREATOR, "only creator");
+            require(msg.sender == owner(), "only creator");
         }
         RELEASE_POLICY = _policy;
         emit ReleasePolicySet(msg.sender, _policy);
@@ -375,11 +380,11 @@ contract DistributorV1 is ReentrancyGuard {
         ReleasePolicy policy = RELEASE_POLICY;
         if (policy == ReleasePolicy.Anyone) return;
         if (policy == ReleasePolicy.Creator) {
-            require(msg.sender == CREATOR, "only creator");
+            require(msg.sender == owner(), "only creator");
         } else if (policy == ReleasePolicy.Factory) {
             require(_isFactoryReleaseCaller(), "only factory");
         } else {
-            require(msg.sender == CREATOR || _isFactoryReleaseCaller(), "only creator or factory");
+            require(msg.sender == owner() || _isFactoryReleaseCaller(), "only creator or factory");
         }
     }
 
@@ -433,6 +438,9 @@ enum ReleasePolicy {
 /// @param numberOfEpochs total number of epochs of the distribution
 /// @param totalDistributionAmount amount of distribution token that will be transferred to this contract,
 ///        constructor reverts if it does not cover the sum of rewards of all epochs
+/// @param initialMetadata on-chain metadata pairs written at deployment (see `MetadataStore`; the
+///        reserved "metadata" key holds the URI/JSON returned by `metadata()` and `contractURI()`)
+/// @param metadataEditable false = metadata is frozen forever after the launch-time pairs are written
 struct DistributorConfig {
     address distributionToken;
     address participationToken;
@@ -448,6 +456,8 @@ struct DistributorConfig {
     uint256 allowlistDeadline;
     uint256 numberOfEpochs;
     uint256 totalDistributionAmount;
+    MetadataEntry[] initialMetadata;
+    bool metadataEditable;
 }
 
 struct Range {
@@ -470,11 +480,13 @@ struct GetContractInfoResult {
     uint256 remainingRewards;
     uint256 numberOfEpochs;
     uint256 totalDistributionAmount;
-    address creator;
+    address owner;
     ReleasePolicy releasePolicy;
     Share[] shares;
 
     uint256 totalUniqueParticipants;
+
+    bool metadataLocked;
 }
 
 struct EpochInfo {

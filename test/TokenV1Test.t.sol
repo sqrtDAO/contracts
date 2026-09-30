@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {TokenV1, Allocation, VestingInfo} from "../src/v1/TokenV1.sol";
+import {MetadataEntry} from "../src/utils/Metadata.sol";
 
 contract TokenV1Test is Test {
     TokenV1 token;
@@ -17,7 +18,7 @@ contract TokenV1Test is Test {
         allocs[1] = Allocation({recipient: address(2), amount: 2000 ether, startTime: 0, duration: 0});
         allocs[2] = Allocation({recipient: address(3), amount: 500 ether, startTime: 0, duration: 0});
 
-        token = new TokenV1("My Token", "MTK", allocs);
+        token = new TokenV1("My Token", "MTK", allocs, address(this), new MetadataEntry[](0), true);
 
         assertEq(token.name(), "My Token");
         assertEq(token.symbol(), "MTK");
@@ -39,14 +40,14 @@ contract TokenV1Test is Test {
     function testRevertEmptyAllocations() public {
         Allocation[] memory allocs = new Allocation[](0);
         vm.expectRevert("No allocations");
-        new TokenV1("T", "S", allocs);
+        new TokenV1("T", "S", allocs, address(this), new MetadataEntry[](0), true);
     }
 
     function testRevertZeroAddress() public {
         Allocation[] memory allocs = new Allocation[](1);
         allocs[0] = Allocation({recipient: address(0), amount: 100, startTime: 0, duration: 0});
         vm.expectRevert("Invalid recipient");
-        new TokenV1("T", "S", allocs);
+        new TokenV1("T", "S", allocs, address(this), new MetadataEntry[](0), true);
     }
 
     function testRevertDuplicateRecipient() public {
@@ -54,14 +55,14 @@ contract TokenV1Test is Test {
         allocs[0] = Allocation({recipient: address(1), amount: 100, startTime: 0, duration: 0});
         allocs[1] = Allocation({recipient: address(1), amount: 200, startTime: 0, duration: 0});
         vm.expectRevert("Duplicate recipient");
-        new TokenV1("T", "S", allocs);
+        new TokenV1("T", "S", allocs, address(this), new MetadataEntry[](0), true);
     }
 
     function testZeroAmountsAllowed() public {
         Allocation[] memory allocs = new Allocation[](2);
         allocs[0] = Allocation({recipient: address(1), amount: 0, startTime: 0, duration: 0});
         allocs[1] = Allocation({recipient: address(2), amount: 500, startTime: 0, duration: 0});
-        token = new TokenV1("T", "S", allocs);
+        token = new TokenV1("T", "S", allocs, address(this), new MetadataEntry[](0), true);
         assertEq(token.vestingInfo(address(1)).allocated, 0);
         assertEq(token.balanceOf(address(2)), 500);
         assertEq(token.totalSupply(), 500);
@@ -70,7 +71,7 @@ contract TokenV1Test is Test {
     function _vestingToken(uint256 _amount, uint256 _startTime, uint256 _duration) internal returns (TokenV1) {
         Allocation[] memory allocs = new Allocation[](1);
         allocs[0] = Allocation({recipient: address(this), amount: _amount, startTime: _startTime, duration: _duration});
-        return new TokenV1("T", "S", allocs);
+        return new TokenV1("T", "S", allocs, address(this), new MetadataEntry[](0), true);
     }
 
     function testFullyVestedAtDeploymentMints() public {
@@ -210,8 +211,9 @@ contract TokenV1Test is Test {
         allocsB[0] = Allocation({recipient: address(2), amount: 1, startTime: 999, duration: 12345});
         allocsB[1] = Allocation({recipient: address(3), amount: 500 ether, startTime: 1, duration: 999});
 
-        TokenV1 a = new TokenV1("AAA", "AAA", allocsA);
-        TokenV1 b = new TokenV1("Some Really Long Token Name", "LONGSYMBOL", allocsB);
+        TokenV1 a = new TokenV1("AAA", "AAA", allocsA, address(this), new MetadataEntry[](0), true);
+        TokenV1 b =
+            new TokenV1("Some Really Long Token Name", "LONGSYMBOL", allocsB, address(this), new MetadataEntry[](0), true);
 
         assertEq(address(a).codehash, address(b).codehash);
     }

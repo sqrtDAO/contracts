@@ -15,6 +15,7 @@ import {FixedEmission} from "../src/utils/emission-function/FixedEmission.sol";
 import {LinearEmission} from "../src/utils/emission-function/LinearEmission.sol";
 import {ExponentialEmission} from "../src/utils/emission-function/ExponentialEmission.sol";
 import {TokenV1, Allocation} from "../src/v1/TokenV1.sol";
+import {MetadataEntry} from "../src/utils/Metadata.sol";
 
 contract FactoryV1LocalScript is Script {
     function run() external returns (FactoryV1 factory) {
@@ -71,7 +72,7 @@ contract FactoryV1LocalScript is Script {
             startTime: 0,
             duration: 0
         });
-        TokenV1 fakeUsd = new TokenV1("Fake USD", "FUSD", allocation);
+        TokenV1 fakeUsd = new TokenV1("Fake USD", "FUSD", allocation, msg.sender, new MetadataEntry[](0), true);
 
         console.log("fakeUsd", address(fakeUsd));
 

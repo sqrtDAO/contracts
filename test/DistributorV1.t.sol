@@ -11,6 +11,7 @@ import {
     ReleasePolicy
 } from "../src/v1/DistributorV1.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
+import {MetadataEntry} from "../src/utils/Metadata.sol";
 import {LinearEmission, LinearEmissionConfig} from "../src/utils/emission-function/LinearEmission.sol";
 import {ExponentialEmission, ExponentialEmissionConfig} from "../src/utils/emission-function/ExponentialEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
@@ -67,7 +68,9 @@ contract DistributorV1Test is Test {
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 10_000 ether
+                totalDistributionAmount: 10_000 ether,
+                initialMetadata: new MetadataEntry[](0),
+                metadataEditable: true
             })
         );
 
@@ -416,7 +419,9 @@ contract DistributorV1Test is Test {
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 10_000 ether
+                totalDistributionAmount: 10_000 ether,
+                initialMetadata: new MetadataEntry[](0),
+                metadataEditable: true
             })
         );
 
@@ -473,7 +478,9 @@ contract DistributorV1Test is Test {
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 10_000 ether
+                totalDistributionAmount: 10_000 ether,
+                initialMetadata: new MetadataEntry[](0),
+                metadataEditable: true
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -514,7 +521,9 @@ contract DistributorV1Test is Test {
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 10_000 ether
+                totalDistributionAmount: 10_000 ether,
+                initialMetadata: new MetadataEntry[](0),
+                metadataEditable: true
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -560,7 +569,9 @@ contract DistributorV1Test is Test {
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 10_000 ether
+                totalDistributionAmount: 10_000 ether,
+                initialMetadata: new MetadataEntry[](0),
+                metadataEditable: true
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
@@ -856,7 +867,9 @@ contract DistributorV1Test is Test {
             allowlistSigner: address(0),
             allowlistDeadline: 0,
             numberOfEpochs: 100,
-            totalDistributionAmount: 10_000 ether
+            totalDistributionAmount: 10_000 ether,
+            initialMetadata: new MetadataEntry[](0),
+            metadataEditable: true
         });
     }
 
@@ -912,7 +925,9 @@ contract DistributorV1Test is Test {
                 allowlistSigner: address(0),
                 allowlistDeadline: 0,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 10_000 ether
+                totalDistributionAmount: 10_000 ether,
+                initialMetadata: new MetadataEntry[](0),
+                metadataEditable: true
             })
         );
         distributionToken.mint(address(d), 1_000 ether);
@@ -1010,7 +1025,9 @@ contract DistributorV1Test is Test {
                 allowlistSigner: signer,
                 allowlistDeadline: deadline,
                 numberOfEpochs: 100,
-                totalDistributionAmount: 10_000 ether
+                totalDistributionAmount: 10_000 ether,
+                initialMetadata: new MetadataEntry[](0),
+                metadataEditable: true
             })
         );
         distributionToken.mint(address(allowlisted), 1_000 ether);
