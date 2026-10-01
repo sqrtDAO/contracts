@@ -9,6 +9,7 @@ import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
 import {INonfungiblePositionManager, MintParams} from "../src/external-interfaces/INonfungiblePositionManager.sol";
 import {DistributorV1, DistributorConfig, GetContractInfoResult, ReleasePolicy} from "../src/v1/DistributorV1.sol";
+import {FeeVault} from "src/utils/FeeVault.sol";
 import {MetadataEntry} from "../src/utils/Metadata.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
@@ -52,7 +53,8 @@ contract FactoryV1LiquidityTest is Test {
             INonfungiblePositionManager(address(mockPositionManager)),
             IPermit2(address(mockPermit2)),
             new TokenV1Factory(),
-            new DistributionV1Factory()
+            new DistributionV1Factory(),
+            new FeeVault(owner)
         );
     }
 
@@ -303,7 +305,8 @@ contract FactoryV1LiquidityTest is Test {
             INonfungiblePositionManager(address(partialManager)),
             IPermit2(address(mockPermit2)),
             new TokenV1Factory(),
-            new DistributionV1Factory()
+            new DistributionV1Factory(),
+            new FeeVault(owner)
         );
 
         uint256 amount0 = 100 ether;
@@ -470,7 +473,8 @@ contract FactoryV1LiquidityTest is Test {
             INonfungiblePositionManager(address(partialManager)),
             IPermit2(address(mockPermit2)),
             new TokenV1Factory(),
-            new DistributionV1Factory()
+            new DistributionV1Factory(),
+            new FeeVault(owner)
         );
 
         uint256 participationAmount = 100 ether;

@@ -14,9 +14,11 @@ import {Share} from "src/utils/Shares.sol";
 import {Hook} from "src/utils/Hook.sol";
 import {MetadataEntry} from "../src/utils/Metadata.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
 import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
+import {FeeVault} from "src/utils/FeeVault.sol";
 
 contract FactoryV1Test is Test {
     FactoryV1 public factory;
@@ -49,7 +51,8 @@ contract FactoryV1Test is Test {
             INonfungiblePositionManager(address(0x1)),
             IPermit2(address(0x2)),
             new TokenV1Factory(),
-            new DistributionV1Factory()
+            new DistributionV1Factory(),
+            new FeeVault(owner)
         );
     }
 
@@ -392,6 +395,61 @@ contract FactoryV1Test is Test {
 
         (uint256 bbBps,) = DistributorV1(distributorAddr).shares(0);
         assertEq(bbBps, 10_000);
+    }
+
+    function testProtocolFeeGoesToVaultNotFactory() public {
+        FeeVault vault = factory.FEE_VAULT();
+        // user share needs a real hook: OZ v5 reverts on approve to the zero address during release
+        PullingHook pullingHook = new PullingHook(address(participationToken));
+        address distributorAddr = _createDistributor(20, 10 ether, ReleasePolicy.Anyone, address(pullingHook));
+        DistributorV1 distributor = DistributorV1(distributorAddr);
+
+        // injected fee share calldata targets the vault, not the factory
+        (, Hook memory hook) = distributor.shares(1);
+        bytes memory expectedCallData =
+            abi.encodeCall(TransferToHook.transferTo, (address(participationToken), address(vault)));
+        assertEq(hook.contractAddress, address(factory.TRANSFER_TO_HOOK()));
+        assertEq(hook.callData, expectedCallData);
+
+        // participate in epoch 0, then release it
+        vm.startPrank(user);
+        participationToken.approve(distributorAddr, 10 ether);
+        distributor.participate(10 ether, Range({from: 0, length: 1}), address(0), "");
+        vm.stopPrank();
+
+        vm.warp(startTimestamp + 2 * epochDuration); // epoch 2: epoch 0 is releasable
+        distributor.releaseEpochFunds();
+
+        uint256 expectedFee = (10 ether * 20) / 10000;
+        assertEq(participationToken.balanceOf(address(vault)), expectedFee, "fee must land in the vault");
+        assertEq(participationToken.balanceOf(address(factory)), 0, "factory must hold no fee");
+        assertEq(participationToken.balanceOf(distributorAddr), 0, "distributor fully released");
+        assertEq(pullingHook.pulled(), 10 ether - expectedFee, "user share pulled by its hook");
+    }
+
+    function testVaultBalanceNotDrainableViaCreateDistributor() public {
+        FeeVault vault = factory.FEE_VAULT();
+        uint256 vaultBalance = 1_000 ether;
+        participationToken.mint(address(vault), vaultBalance);
+
+        // attacker crafts a distributor config pulling exactly the vault's balance
+        Share[] memory shares = new Share[](1);
+        shares[0] = Share({shareBps: 10_000, hook: Hook({contractAddress: address(0), callData: ""})});
+        DistributorConfig memory config = _distributorConfigWith(shares);
+        config.distributionToken = address(participationToken);
+        config.participationToken = address(participationToken);
+        // size the curve to the vault balance so the distributor constructor passes
+        config.emissionFunction = EmissionFunction({
+            emissionContract: emission, curveConfig: abi.encode(FixedEmissionConfig({amount: vaultBalance / 100}))
+        });
+        config.totalDistributionAmount = vaultBalance;
+
+        // factory holds zero of the token, so the factory-funded transfer reverts
+        vm.prank(address(0xBAD));
+        vm.expectRevert(
+            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientBalance.selector, address(factory), 0, vaultBalance)
+        );
+        factory.createDistributor(config, false);
     }
 }
 

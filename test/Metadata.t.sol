@@ -13,6 +13,7 @@ import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {FactoryV1} from "../src/v1/FactoryV1.sol";
+import {FeeVault} from "src/utils/FeeVault.sol";
 import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
@@ -56,7 +57,10 @@ contract MetadataTest is Test {
         return _token(_emptyEntries(), true, address(this));
     }
 
-    function _token(MetadataEntry[] memory _initialMetadata, bool _editable, address _creator) internal returns (TokenV1) {
+    function _token(MetadataEntry[] memory _initialMetadata, bool _editable, address _creator)
+        internal
+        returns (TokenV1)
+    {
         Allocation[] memory allocs = new Allocation[](1);
         allocs[0] = Allocation({recipient: address(this), amount: 1, startTime: 0, duration: 0});
         return new TokenV1(
@@ -475,7 +479,8 @@ contract MetadataTest is Test {
             INonfungiblePositionManager(address(0x1)),
             IPermit2(address(0x2)),
             tokenFactory,
-            new DistributionV1Factory()
+            new DistributionV1Factory(),
+            new FeeVault(address(0xCAFE))
         );
 
         string[] memory keys = new string[](1);
@@ -517,7 +522,8 @@ contract MetadataTest is Test {
             INonfungiblePositionManager(address(0x1)),
             IPermit2(address(0x2)),
             tokenFactory,
-            new DistributionV1Factory()
+            new DistributionV1Factory(),
+            new FeeVault(address(0xCAFE))
         );
 
         string[] memory keys = new string[](1);

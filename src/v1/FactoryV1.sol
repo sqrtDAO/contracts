@@ -10,6 +10,7 @@ import {TokenV1Factory} from "./TokenV1Factory.sol";
 import {DistributionV1Factory} from "./DistributionV1Factory.sol";
 import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
 import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
+import {FeeVault} from "src/utils/FeeVault.sol";
 import {MintParams} from "../external-interfaces/INonfungiblePositionManager.sol";
 import {INonfungiblePositionManager} from "../external-interfaces/INonfungiblePositionManager.sol";
 import {SharesLib, Share} from "src/utils/Shares.sol";
@@ -30,6 +31,7 @@ contract FactoryV1 is Ownable {
     IPermit2 public immutable PERMIT2;
     TokenV1Factory public immutable TOKEN_FACTORY;
     DistributionV1Factory public immutable DISTRIBUTOR_FACTORY;
+    FeeVault public immutable FEE_VAULT;
 
     uint24 public constant LIQUIDITY_POOL_FEE = 3000; // 0.3%
 
@@ -48,7 +50,8 @@ contract FactoryV1 is Ownable {
         INonfungiblePositionManager _positionManager,
         IPermit2 _permit2,
         TokenV1Factory _tokenFactory,
-        DistributionV1Factory _distributorFactory
+        DistributionV1Factory _distributorFactory,
+        FeeVault _feeVault
     ) Ownable(_initialOwner) {
         config.protocolFeeBps = _protocolFeeBps;
         POSITION_MANAGER = _positionManager;
@@ -57,6 +60,7 @@ contract FactoryV1 is Ownable {
         BUY_AND_BURN_HOOK = _buyAndBurnHookV3;
         TOKEN_FACTORY = _tokenFactory;
         DISTRIBUTOR_FACTORY = _distributorFactory;
+        FEE_VAULT = _feeVault;
         _tokenFactory.setFactory(address(this));
         _distributorFactory.setFactory(address(this));
     }
@@ -284,7 +288,9 @@ contract FactoryV1 is Ownable {
                 shareBps: config.protocolFeeBps,
                 hook: Hook({
                     contractAddress: address(TRANSFER_TO_HOOK),
-                    callData: abi.encodeCall(TransferToHook.transferTo, (_config.participationToken, address(this)))
+                    callData: abi.encodeCall(
+                        TransferToHook.transferTo, (_config.participationToken, address(FEE_VAULT))
+                    )
                 })
             })
         );

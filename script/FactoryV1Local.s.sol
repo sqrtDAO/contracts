@@ -13,6 +13,7 @@ import {ExactInputParams} from "../src/external-interfaces/IUniswapV3SwapRouter.
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {FixedEmission} from "../src/utils/emission-function/FixedEmission.sol";
 import {LinearEmission} from "../src/utils/emission-function/LinearEmission.sol";
+import {FeeVault} from "src/utils/FeeVault.sol";
 import {ExponentialEmission} from "../src/utils/emission-function/ExponentialEmission.sol";
 import {TokenV1, Allocation, TokenConfig} from "../src/v1/TokenV1.sol";
 import {MetadataEntry} from "../src/utils/Metadata.sol";
@@ -42,6 +43,9 @@ contract FactoryV1LocalScript is Script {
         TokenV1Factory tokenFactory = new TokenV1Factory();
         DistributionV1Factory distributorFactory = new DistributionV1Factory();
 
+        // vault
+        FeeVault feeVault = new FeeVault(msg.sender);
+
         factory = new FactoryV1(
             msg.sender,
             400, // 4%
@@ -50,7 +54,8 @@ contract FactoryV1LocalScript is Script {
             INonfungiblePositionManager(address(positionManager)),
             IPermit2(address(permit2)),
             tokenFactory,
-            distributorFactory
+            distributorFactory,
+            feeVault
         );
 
         // setConfig replaces the whole config — releaseOperator is still zero-initialized here, so this is a no-op for it
@@ -97,6 +102,8 @@ contract FactoryV1LocalScript is Script {
 
         console.log("tokenFactory", address(tokenFactory));
         console.log("distributorFactory", address(distributorFactory));
+
+        console.log("feeVault", address(feeVault));
 
         console.log("factoryV1", address(factory));
 

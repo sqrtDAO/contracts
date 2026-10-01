@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {FactoryV1} from "../src/v1/FactoryV1.sol";
+import {FeeVault} from "src/utils/FeeVault.sol";
 import {TokenV1Factory} from "../src/v1/TokenV1Factory.sol";
 import {DistributionV1Factory, AddressAndDistributionInfo} from "../src/v1/DistributionV1Factory.sol";
 import {DistributorConfig, GetContractInfoResult, ReleasePolicy} from "../src/v1/DistributorV1.sol";
@@ -56,7 +57,8 @@ contract FactoryListTest is Test {
             INonfungiblePositionManager(address(0x1)),
             IPermit2(address(0x2)),
             tokenFactory,
-            distributorFactory
+            distributorFactory,
+            new FeeVault(owner)
         );
     }
 
@@ -64,11 +66,7 @@ contract FactoryListTest is Test {
         Allocation[] memory allocs = new Allocation[](1);
         allocs[0] = Allocation({recipient: address(this), amount: 1 ether, startTime: 0, duration: 0});
         return TokenConfig({
-            name: "T",
-            symbol: "T",
-            allocations: allocs,
-            initialMetadata: new MetadataEntry[](0),
-            metadataEditable: true
+            name: "T", symbol: "T", allocations: allocs, initialMetadata: new MetadataEntry[](0), metadataEditable: true
         });
     }
 

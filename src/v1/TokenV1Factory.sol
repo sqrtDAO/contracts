@@ -54,7 +54,11 @@ contract TokenV1Factory {
     /// @param _creator the address that requested the token creation (the end user, not this factory);
     ///        becomes the token owner
     /// @return tokenAddress address of the deployed token
-    function createToken(TokenConfig memory _config, address _creator) external onlyFactory returns (address tokenAddress) {
+    function createToken(TokenConfig memory _config, address _creator)
+        external
+        onlyFactory
+        returns (address tokenAddress)
+    {
         tokenAddress = address(new TokenV1(_config, _creator));
         creatorOf[tokenAddress] = _creator;
         tokenList.push(tokenAddress);

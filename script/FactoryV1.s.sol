@@ -13,6 +13,7 @@ import {INonfungiblePositionManager} from "../src/external-interfaces/INonfungib
 import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
 import {LinearEmission} from "../src/utils/emission-function/LinearEmission.sol";
+import {FeeVault} from "src/utils/FeeVault.sol";
 import {ExponentialEmission} from "../src/utils/emission-function/ExponentialEmission.sol";
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {Share} from "../src/utils/Shares.sol";
@@ -33,6 +34,8 @@ contract FactoryV1Script is Script {
 
         uint256 pk = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(pk);
+
+        FeeVault feeVault = new FeeVault(initialOwner);
 
         // EmissionFunctions
         FixedEmission fixedEmission = new FixedEmission();
@@ -99,7 +102,8 @@ contract FactoryV1Script is Script {
             INonfungiblePositionManager(positionManager),
             IPermit2(permit2),
             tokenFactory,
-            distributorFactory
+            distributorFactory,
+            feeVault
         );
 
         // setConfig replaces the whole config — releaseOperator is still zero-initialized here, so this is a no-op for it
@@ -113,6 +117,7 @@ contract FactoryV1Script is Script {
             );
         }
 
+        console.log("initialOwner", address(initialOwner));
         console.log("fixedEmission", address(fixedEmission));
         console.log("linearEmission", address(linearEmission));
         console.log("exponentialEmission", address(exponentialEmission));
@@ -120,6 +125,7 @@ contract FactoryV1Script is Script {
         console.log("sampleToken", address(sampleToken));
         console.log("transferToHook", address(transferToHook));
         console.log("buyAndBurnHook", address(buyAndBurnHook));
+        console.log("feeVault", address(feeVault));
         console.log("tokenFactory", address(tokenFactory));
         console.log("distributorFactory", address(distributorFactory));
         console.log("factoryV1", address(factory));
