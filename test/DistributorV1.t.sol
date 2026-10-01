@@ -588,6 +588,50 @@ contract DistributorV1Test is Test {
         assertEq(allowlisted.epochUserParticipation(0, participant), 10 ether);
     }
 
+    function testAllowlistSignatureCoversRecipientNotPayer() public {
+        uint256 signerPk = 0xABCD;
+        DistributorConfig memory config = _defaultConfig();
+        config.allowlistSigner = vm.addr(signerPk);
+        config.allowlistDeadline = block.timestamp + epochDuration;
+        DistributorV1 allowlisted = new DistributorV1(address(this), address(0), config);
+        distributionToken.mint(address(allowlisted), 1_000 ether);
+
+        // signature over the recipient (`participant`), not over the payer
+        bytes32 message = keccak256(abi.encode(address(allowlisted), participant, block.chainid));
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        // a non-allowlisted third party pays with their own tokens; the allowlisted recipient is credited
+        participationToken.mint(address(this), 10 ether);
+        participationToken.approve(address(allowlisted), 10 ether);
+        allowlisted.participate(10 ether, Range({from: 0, length: 1}), participant, signature);
+
+        assertEq(allowlisted.epochUserParticipation(0, participant), 10 ether);
+        assertEq(allowlisted.epochUserParticipation(0, address(this)), 0);
+    }
+
+    function testAllowlistRejectsSignatureForDifferentRecipient() public {
+        uint256 signerPk = 0xABCD;
+        DistributorConfig memory config = _defaultConfig();
+        config.allowlistSigner = vm.addr(signerPk);
+        config.allowlistDeadline = block.timestamp + epochDuration;
+        DistributorV1 allowlisted = new DistributorV1(address(this), address(0), config);
+        distributionToken.mint(address(allowlisted), 1_000 ether);
+
+        // a signature covering the payer (address(this)) must not allow crediting another recipient
+        bytes32 message = keccak256(abi.encode(address(allowlisted), address(this), block.chainid));
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);
+        bytes memory payerSignature = abi.encodePacked(r, s, v);
+
+        participationToken.mint(address(this), 10 ether);
+        participationToken.approve(address(allowlisted), 10 ether);
+
+        vm.expectRevert(bytes("not allowlisted"));
+        allowlisted.participate(10 ether, Range({from: 0, length: 1}), participant, payerSignature);
+    }
+
     // --- claimFor / setClaimFeeBps tests ---
 
     function testSetClaimFeeBps() public {

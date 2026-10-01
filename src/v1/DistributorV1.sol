@@ -216,8 +216,11 @@ contract DistributorV1 is ReentrancyGuard, MetadataStore {
 
     /**
      * @notice Allows a user to participate in the reward program by locking tokens for multiple epochs.
-     * @dev Verifies allowlist signature if allowlist is enabled and deadline has not passed.
-     * @param _allowlistSignature ECDSA signature signed by ALLOWLIST_SIGNER over keccak256(abi.encode(address(this), msg.sender, chainId)) (pass empty if allowlist is disabled)
+     * @dev Verifies allowlist signature over the resolved recipient if allowlist is enabled and deadline has not passed.
+     * @param _recipient address credited with the participation (defaults to msg.sender)
+     * @param _allowlistSignature ECDSA signature signed by ALLOWLIST_SIGNER over
+     *        keccak256(abi.encode(address(this), recipient, chainId)) where `recipient` is the
+     *        resolved `_recipient` (pass empty if allowlist is disabled)
      */
     function participate(
         uint256 _amountPerEpoch,
@@ -225,7 +228,10 @@ contract DistributorV1 is ReentrancyGuard, MetadataStore {
         address _recipient,
         bytes memory _allowlistSignature
     ) public nonReentrant {
-        _verifyAllowlist(_allowlistSignature);
+        if (_recipient == address(0)) {
+            _recipient = msg.sender;
+        }
+        _verifyAllowlist(_recipient, _allowlistSignature);
         uint256 currEpoch = currentEpoch();
         // require(block.timestamp >= STARTING_TIMESTAMP); // already checked in `currentEpoch()` function
         require(_range.from >= currEpoch, "Passed epoch participation not allowed");
@@ -236,10 +242,6 @@ contract DistributorV1 is ReentrancyGuard, MetadataStore {
         require(_amountPerEpoch >= MIN_PARTICIPATION, "Amount below minimum");
 
         PARTICIPATION_TOKEN.safeTransferFrom(msg.sender, address(this), _range.length * _amountPerEpoch);
-
-        if (_recipient == address(0)) {
-            _recipient = msg.sender;
-        }
 
         for (uint256 i = 0; i < _range.length; i++) {
             uint256 epoch = _range.from + i;
@@ -270,13 +272,17 @@ contract DistributorV1 is ReentrancyGuard, MetadataStore {
     }
 
     /**
-     * @notice Verifies that the caller is allowlisted (via ECDSA signature).
+     * @notice Verifies that the recipient is allowlisted (via ECDSA signature).
      * @dev Skips check if allowlist is disabled (signer == address(0)) or deadline has passed.
+     * @dev The signature covers the recipient, not the caller: allowlisted users can be paid for
+     *      by anyone holding their signature, and contracts like `EthParticipationRouter` can
+     *      participate on their behalf. For self-participation the covered address equals
+     *      `msg.sender`, so the signed message is identical to the previous scheme.
      */
-    function _verifyAllowlist(bytes memory _signature) internal view {
+    function _verifyAllowlist(address _recipient, bytes memory _signature) internal view {
         if (ALLOWLIST_SIGNER == address(0)) return;
         if (block.timestamp >= ALLOWLIST_DEADLINE) return;
-        bytes32 message = keccak256(abi.encode(address(this), msg.sender, block.chainid));
+        bytes32 message = keccak256(abi.encode(address(this), _recipient, block.chainid));
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
         (address recovered, ECDSA.RecoverError error,) = ECDSA.tryRecover(digest, _signature);
         if (error != ECDSA.RecoverError.NoError || recovered != ALLOWLIST_SIGNER) {
