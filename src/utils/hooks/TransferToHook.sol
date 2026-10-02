@@ -22,7 +22,7 @@ contract TransferToHook {
         uint256 amount = token.allowance(sender, address(this));
         if (amount == 0) return;
 
-        require(token.transferFrom(sender, _to, amount), "transferFrom failed");
+        IERC20(_token).safeTransferFrom(sender, _to, amount);
 
         emit Transferred(_to, amount);
     }

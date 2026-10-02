@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {SharesLib, Share} from "../src/utils/Shares.sol";
 import {HookLib, Hook, HookFailure} from "../src/utils/Hook.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {TransferToHook} from "src/utils/hooks/TransferToHook.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract SharesConsumer {
     using SharesLib for Share;
@@ -278,5 +280,89 @@ contract PullingHook {
             require(ERC20Mock(token).transferFrom(msg.sender, address(this), allowance));
             pulled += allowance;
         }
+    }
+}
+
+contract NoReturnToken {
+    mapping(address account => uint256) public balanceOf;
+    mapping(address account => mapping(address spender => uint256)) public allowance;
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    // Non-standard: no return value.
+    function transferFrom(address from, address to, uint256 amount) external {
+        uint256 allowed = allowance[from][msg.sender];
+        require(allowed >= amount, "insufficient allowance");
+        allowance[from][msg.sender] = allowed - amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+    }
+}
+
+contract FalseReturningToken {
+    mapping(address account => mapping(address spender => uint256)) public allowance;
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    // Non-standard: returns false without reverting.
+    function transferFrom(address, address, uint256) external pure returns (bool) {
+        return false;
+    }
+}
+
+contract TransferToHookTest is Test {
+    TransferToHook public hook;
+
+    function setUp() public {
+        hook = new TransferToHook();
+    }
+
+    function test_transferTo_noReturnToken_succeeds() public {
+        NoReturnToken token = new NoReturnToken();
+        token.mint(address(this), 1000);
+        token.approve(address(hook), 500);
+
+        vm.expectEmit(true, true, true, true);
+        emit TransferToHook.Transferred(address(this), 500);
+        hook.transferTo(address(token), address(this));
+
+        assertEq(token.balanceOf(address(this)), 1000);
+    }
+
+    function test_transferTo_falseReturningToken_reverts() public {
+        FalseReturningToken token = new FalseReturningToken();
+        token.approve(address(hook), 500);
+
+        vm.expectRevert();
+        hook.transferTo(address(token), address(this));
+    }
+
+    function test_transferTo_zeroAllowance_returnsEarly() public {
+        ERC20Mock token = new ERC20Mock();
+
+        vm.expectCall(address(token), abi.encodeCall(IERC20.allowance, (address(this), address(hook))), 1);
+        hook.transferTo(address(token), address(this));
+    }
+
+    function test_transferTo_standardToken_succeeds() public {
+        ERC20Mock token = new ERC20Mock();
+        token.mint(address(this), 1000);
+        token.approve(address(hook), 500);
+
+        vm.expectEmit(true, true, true, true);
+        emit TransferToHook.Transferred(address(this), 500);
+        hook.transferTo(address(token), address(this));
+
+        assertEq(token.balanceOf(address(this)), 1000);
     }
 }
