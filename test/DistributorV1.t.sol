@@ -17,7 +17,8 @@ import {ExponentialEmission, ExponentialEmissionConfig} from "../src/utils/emiss
 import {EmissionFunction} from "../src/utils/emission-function/EmissionFunction.sol";
 import {IEmissionFunction} from "../src/utils/emission-function/IEmissionFunction.sol";
 import {Share} from "src/utils/Shares.sol";
-import {Hook} from "src/utils/Hook.sol";
+import {Hook, HookLib} from "src/utils/Hook.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -1225,6 +1226,85 @@ contract DistributorV1Test is Test {
         GetContractInfoResult memory info = distributor.getContractInfo();
         assertEq(uint256(info.releasePolicy), uint256(ReleasePolicy.Anyone));
     }
+
+    // --- releaseEpochFunds reentrancy guard tests (audit L-1 defense-in-depth) ---
+
+    function testReleaseReentrantHookRevertsAndNoFundsMove() public {
+        ReentrantHook hook = new ReentrantHook();
+        DistributorV1 d = _createDistributorWithReleaseHook(address(hook));
+        _participateOneEpochAndWarp(d); // participant holds 10 ether of epoch 0
+
+        hook.setMode(ReentrantHook.Mode.Release);
+
+        // the hook re-enters releaseEpochFunds while the distributor holds an approval to it;
+        // the guard must revert the re-entrant call, which bubbles through the hook as
+        // HookReverted(ReentrancyGuardReentrantCall) and reverts the whole release
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                HookLib.HookReverted.selector,
+                abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector)
+            )
+        );
+        d.releaseEpochFunds();
+
+        // nothing moved and the release did not consume any epoch
+        assertEq(d.nextEpochToRelease(), 0, "nextEpochToRelease must not advance on reverted release");
+        assertEq(participationToken.balanceOf(address(d)), 10 ether, "participation tokens must not move");
+        assertEq(distributionToken.balanceOf(address(d)), 1_000 ether, "distribution tokens must not move");
+        assertEq(participationToken.allowance(address(d), address(hook)), 0, "no dangling allowance");
+    }
+
+    function testReleaseReentrantHookCannotReenterParticipate() public {
+        ReentrantHook hook = new ReentrantHook();
+        DistributorV1 d = _createDistributorWithReleaseHook(address(hook));
+        _participateOneEpochAndWarp(d); // participant holds 10 ether of epoch 0
+
+        hook.setMode(ReentrantHook.Mode.Participate);
+        d.releaseEpochFunds(); // hook tries to re-enter participate mid-release and fails
+
+        assertEq(hook.reentrantCallBlocked(), true, "re-entrant participate must be blocked");
+        assertEq(
+            hook.reentrantRevertData(),
+            abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
+            "blocked by the reentrancy guard, not another check"
+        );
+
+        // the release itself completed normally, exactly once
+        assertEq(d.nextEpochToRelease(), 1);
+        // the re-entrant participate must not have credited the hook for the current epoch
+        assertEq(d.epochUserParticipation(1, address(hook)), 0, "hook must not gain participation mid-release");
+        assertEq(participationToken.balanceOf(address(d)), 10 ether, "only epoch 0 participation released");
+    }
+
+    function testReleaseReentrantHookCannotReenterClaim() public {
+        ReentrantHook hook = new ReentrantHook();
+        DistributorV1 d = _createDistributorWithReleaseHook(address(hook));
+
+        // the hook is the sole participant of epoch 0, so without the guard its re-entrant
+        // claim mid-release would actually pay out rewards
+        participationToken.mint(address(hook), 10 ether);
+        vm.startPrank(address(hook));
+        participationToken.approve(address(d), 10 ether);
+        d.participate(10 ether, Range({from: 0, length: 1}), address(hook), new bytes(0));
+        vm.stopPrank();
+
+        vm.warp(startTimestamp + epochDuration + claimDelaySeconds);
+
+        hook.setMode(ReentrantHook.Mode.Claim);
+        d.releaseEpochFunds(); // hook tries to re-enter claim mid-release and fails
+
+        assertEq(hook.reentrantCallBlocked(), true, "re-entrant claim must be blocked");
+        assertEq(
+            hook.reentrantRevertData(),
+            abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector),
+            "blocked by the reentrancy guard, not another check"
+        );
+
+        // the release itself completed normally, exactly once
+        assertEq(d.nextEpochToRelease(), 1);
+        // the re-entrant claim must not have paid out rewards mid-release
+        assertEq(distributionToken.balanceOf(address(hook)), 0, "hook must not claim rewards mid-release");
+    }
 }
 
 contract DummyHook {
@@ -1249,6 +1329,53 @@ contract PullingHook {
         if (allowance > 0) {
             require(IERC20(token).transferFrom(msg.sender, address(this), allowance));
             pulled += allowance;
+        }
+        return "";
+    }
+}
+
+/// @dev malicious hook that re-enters the distributor from its fallback while the distributor
+///      holds an approval to it; `msg.sender` inside the fallback is always the distributor
+///      invoking this hook
+contract ReentrantHook {
+    enum Mode {
+        None,
+        Release,
+        Participate,
+        Claim
+    }
+
+    Mode public mode;
+    bool public reentrantCallBlocked;
+    bytes public reentrantRevertData;
+
+    function setMode(Mode _mode) external {
+        mode = _mode;
+    }
+
+    fallback(bytes calldata) external returns (bytes memory) {
+        address d = msg.sender; // the distributor calling this hook
+        if (mode == Mode.Release) {
+            // let the revert of the re-entrant call propagate to the release caller
+            DistributorV1(d).releaseEpochFunds();
+        } else if (mode == Mode.Participate) {
+            // re-enter participate for the current epoch; without the guard this would pass the
+            // entry checks and only fail later on the token allowance, instead of being blocked up front
+            uint256 currEpoch = DistributorV1(d).currentEpoch();
+            (bool ok, bytes memory ret) = d.call(
+                abi.encodeCall(
+                    DistributorV1.participate,
+                    (10 ether, Range({from: currEpoch, length: 1}), address(this), new bytes(0))
+                )
+            );
+            reentrantCallBlocked = !ok;
+            reentrantRevertData = ret;
+        } else if (mode == Mode.Claim) {
+            // re-enter claim for this hook's own participation (would pay out if unguarded)
+            (bool ok, bytes memory ret) =
+                d.call(abi.encodeCall(DistributorV1.claim, (address(this), Range({from: 0, length: 1}))));
+            reentrantCallBlocked = !ok;
+            reentrantRevertData = ret;
         }
         return "";
     }

@@ -347,8 +347,11 @@ contract DistributorV1 is ReentrancyGuard, MetadataStore {
      * @notice you should call this manually after each epoch ends
      * @dev reverts if any hook call fails — in that case nothing is released and the call can be
      *      retried; the epoch funds stay in the contract until a release succeeds
+     * @dev `nonReentrant` is defense-in-depth: the safety currently also relies on
+     *      `nextEpochToRelease` being updated before the hook calls, so a refactor could
+     *      silently break it; hooks do not legitimately need to re-enter the distributor
      */
-    function releaseEpochFunds() public {
+    function releaseEpochFunds() public nonReentrant {
         _requireReleaseAllowed();
         uint256 currEpoch = currentEpoch();
 
