@@ -58,6 +58,14 @@ contract FactoryV1LocalScript is Script {
             feeVault
         );
 
+        // safety check: `setFactory` is permissionless until bound, so verify nobody front-ran
+        // the deployment and bound the child factories to a different factory
+        // (if that happened, the `new FactoryV1(...)` above would already have reverted with
+        // "already set" — these checks make the failure explicit and keep guarding if the
+        // deployment is ever split across multiple transactions)
+        require(tokenFactory.factory() == address(factory), "tokenFactory bound to a different factory");
+        require(distributorFactory.factory() == address(factory), "distributorFactory bound to a different factory");
+
         // setConfig replaces the whole config — releaseOperator is still zero-initialized here, so this is a no-op for it
         if (buyBackAndBurnMinBps != 0) {
             factory.setConfig(
