@@ -345,7 +345,8 @@ contract DistributorV1 is ReentrancyGuard, MetadataStore {
 
     /**
      * @notice you should call this manually after each epoch ends
-     * @dev won't revert if hook fails (just returns false)
+     * @dev reverts if any hook call fails — in that case nothing is released and the call can be
+     *      retried; the epoch funds stay in the contract until a release succeeds
      */
     function releaseEpochFunds() public {
         _requireReleaseAllowed();
