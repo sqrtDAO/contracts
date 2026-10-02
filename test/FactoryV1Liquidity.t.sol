@@ -35,6 +35,7 @@ contract FactoryV1LiquidityTest is Test {
     uint256 public claimDelaySeconds = 10;
     uint256 public startTimestamp = 1_000;
     uint160 public constant SQRT_PRICE_1_1 = 79228162514264337593543950336; // price 1.0
+    uint160 public constant SQRT_PRICE_2_1 = 112045541949572279837463876455; // price 2.0
 
     function setUp() public {
         vm.warp(startTimestamp);
@@ -135,6 +136,17 @@ contract FactoryV1LiquidityTest is Test {
         });
     }
 
+    /// @dev Maps (participation, distribution) amounts onto the sorted (token0, token1) order.
+    function _sortedAmounts(uint256 participationAmount, uint256 distributionAmount)
+        internal
+        view
+        returns (uint256 amount0, uint256 amount1)
+    {
+        return address(participationToken) < address(distributionToken)
+            ? (participationAmount, distributionAmount)
+            : (distributionAmount, participationAmount);
+    }
+
     /// @dev Runs createTokenAndLiquidityAndDistribution end-to-end.
     /// usePermit2 pulls the participation token via Permit2 signature instead of allowance.
     function _createTokenAndLiquidityAndDistribution(bool usePermit2, uint256 buyBackAndBurnShareBps)
@@ -174,6 +186,8 @@ contract FactoryV1LiquidityTest is Test {
             _tokenConfig(allocations),
             SQRT_PRICE_1_1,
             participationAmount,
+            distributionTokenAmountDesired,
+            participationAmount, // min: the mock consumes the desired amounts in full
             distributionTokenAmountDesired,
             config,
             buyBackAndBurnShareBps,
@@ -254,6 +268,8 @@ contract FactoryV1LiquidityTest is Test {
             SQRT_PRICE_1_1,
             participationAmount,
             distributionTokenAmountDesired,
+            0,
+            0,
             config,
             0,
             _emptyPermit2()
@@ -274,6 +290,7 @@ contract FactoryV1LiquidityTest is Test {
         distributionToken.approve(address(mockPermit2), amount1);
         vm.stopPrank();
 
+        (uint256 min0, uint256 min1) = _sortedAmounts(amount0, amount1);
         vm.prank(user);
         factory.createPoolAndAddLiquidity(
             address(participationToken),
@@ -281,6 +298,8 @@ contract FactoryV1LiquidityTest is Test {
             SQRT_PRICE_1_1,
             amount0,
             amount1,
+            min0,
+            min1,
             true, // _pullIn: pull distribution token too
             _participationPermit2(amount0),
             _distributionPermit2(amount1)
@@ -324,6 +343,8 @@ contract FactoryV1LiquidityTest is Test {
             SQRT_PRICE_1_1,
             amount0,
             amount1,
+            0,
+            0, // no min: the partial manager consumes less than desired, mins must not block the mint
             true, // _pullIn: pull distribution token too (permit2 path)
             _emptyPermit2(),
             _distributionPermit2(amount1)
@@ -341,6 +362,217 @@ contract FactoryV1LiquidityTest is Test {
         // unused allowances to the position manager were reset to zero
         assertEq(participationToken.allowance(address(partialFactory), address(partialManager)), 0);
         assertEq(distributionToken.allowance(address(partialFactory), address(partialManager)), 0);
+    }
+
+    // --- pool price verification + slippage protection tests ---
+
+    /// @dev Sorted (token0, token1) addresses of the two mock tokens.
+    function _sortedTokens() internal view returns (address token0, address token1) {
+        return address(participationToken) < address(distributionToken)
+            ? (address(participationToken), address(distributionToken))
+            : (address(distributionToken), address(participationToken));
+    }
+
+    /// @dev Audit finding M-1: an attacker front-runs the launch by initializing the pool first with a
+    ///      skewed price. The launch must refuse to adopt that pool instead of minting at the attacker's
+    ///      price (the LP NFT is burned, so a skewed deposit is unrecoverable).
+    function testRevertCreatePoolAndAddLiquidityWhenPoolPreinitializedWithDifferentPrice() public {
+        (address token0, address token1) = _sortedTokens();
+
+        // attacker pre-creates and initializes the pool at a skewed price
+        vm.prank(address(0xBAD));
+        mockPositionManager.createAndInitializePoolIfNecessary(
+            token0, token1, factory.LIQUIDITY_POOL_FEE(), SQRT_PRICE_2_1
+        );
+
+        participationToken.mint(user, 100 ether);
+        distributionToken.mint(user, 50 ether);
+        vm.startPrank(user);
+        participationToken.approve(address(factory), 100 ether);
+        distributionToken.approve(address(factory), 50 ether);
+
+        vm.expectRevert("pool already initialized with a different price");
+        factory.createPoolAndAddLiquidity(
+            address(participationToken),
+            address(distributionToken),
+            SQRT_PRICE_1_1,
+            100 ether,
+            50 ether,
+            0,
+            0,
+            true,
+            _emptyPermit2(),
+            _emptyPermit2()
+        );
+        vm.stopPrank();
+    }
+
+    /// @dev Same front-run protection through the combined launch path of an existing token.
+    function testRevertLiquidityLaunchWhenPoolPreinitializedWithDifferentPrice() public {
+        (address token0, address token1) = _sortedTokens();
+
+        vm.prank(address(0xBAD));
+        mockPositionManager.createAndInitializePoolIfNecessary(
+            token0, token1, factory.LIQUIDITY_POOL_FEE(), SQRT_PRICE_2_1
+        );
+
+        uint256 participationAmount = 100 ether;
+        uint256 distributionTokenAmountDesired = 50 ether;
+        participationToken.mint(user, participationAmount);
+        distributionToken.mint(user, distributionTokenAmountDesired + 100 ether);
+
+        DistributorConfig memory config = _buildConfig(100 ether, 0);
+        config.distributionToken = address(distributionToken);
+
+        vm.startPrank(user);
+        participationToken.approve(address(factory), participationAmount);
+        distributionToken.approve(address(factory), distributionTokenAmountDesired + 100 ether);
+
+        vm.expectRevert("pool already initialized with a different price");
+        factory.createLiquidityAndDistribution(
+            SQRT_PRICE_1_1,
+            participationAmount,
+            distributionTokenAmountDesired,
+            participationAmount, // min: the mock consumes the desired amounts in full
+            distributionTokenAmountDesired,
+            config,
+            0,
+            _emptyPermit2(),
+            _emptyPermit2()
+        );
+        vm.stopPrank();
+    }
+
+    /// @dev A pool pre-initialized with the exact requested price is still adoptable — the legitimate
+    ///      idempotency of `createAndInitializePoolIfNecessary` is preserved.
+    function testCreatePoolAndAddLiquiditySucceedsWhenPoolPreinitializedWithSamePrice() public {
+        (address token0, address token1) = _sortedTokens();
+
+        vm.prank(address(0xBAD));
+        mockPositionManager.createAndInitializePoolIfNecessary(
+            token0, token1, factory.LIQUIDITY_POOL_FEE(), SQRT_PRICE_1_1
+        );
+
+        participationToken.mint(user, 100 ether);
+        distributionToken.mint(user, 50 ether);
+        vm.startPrank(user);
+        participationToken.approve(address(factory), 100 ether);
+        distributionToken.approve(address(factory), 50 ether);
+
+        (uint256 min0, uint256 min1) = _sortedAmounts(100 ether, 50 ether);
+        (address pool,,,,) = factory.createPoolAndAddLiquidity(
+            address(participationToken),
+            address(distributionToken),
+            SQRT_PRICE_1_1,
+            100 ether,
+            50 ether,
+            min0,
+            min1,
+            true,
+            _emptyPermit2(),
+            _emptyPermit2()
+        );
+        vm.stopPrank();
+
+        assertEq(pool, address(mockPositionManager.pool()));
+        assertEq(mockPositionManager.pool().sqrtPriceX96(), SQRT_PRICE_1_1);
+        // both tokens deposited into the pool at the requested price
+        assertEq(participationToken.balanceOf(address(mockPositionManager)), 100 ether);
+        assertEq(distributionToken.balanceOf(address(mockPositionManager)), 50 ether);
+    }
+
+    /// @dev The caller's min amounts must land unmodified in the NFPM mint params.
+    function testMintReceivesCallerMinAmounts() public {
+        uint256 amount0 = 100 ether;
+        uint256 amount1 = 50 ether;
+        participationToken.mint(user, amount0);
+        distributionToken.mint(user, amount1);
+        vm.startPrank(user);
+        participationToken.approve(address(factory), amount0);
+        distributionToken.approve(address(factory), amount1);
+
+        // distinct non-zero mins (below the desired amounts, so the mint succeeds)
+        (uint256 min0, uint256 min1) = _sortedAmounts(90 ether, 40 ether);
+        factory.createPoolAndAddLiquidity(
+            address(participationToken),
+            address(distributionToken),
+            SQRT_PRICE_1_1,
+            amount0,
+            amount1,
+            min0,
+            min1,
+            true,
+            _emptyPermit2(),
+            _emptyPermit2()
+        );
+        vm.stopPrank();
+
+        MintParams memory minted = mockPositionManager.getLastMintParams();
+        assertEq(minted.amount0Min, min0);
+        assertEq(minted.amount1Min, min1);
+        (uint256 desired0, uint256 desired1) = _sortedAmounts(amount0, amount1);
+        assertEq(minted.amount0Desired, desired0);
+        assertEq(minted.amount1Desired, desired1);
+    }
+
+    /// @dev Slippage protection end-to-end: when the position manager would consume less than the
+    ///      caller's min amounts, the launch reverts (the mock mimics the real NFPM price-slippage check).
+    function testRevertLaunchWhenMintBelowMinAmounts() public {
+        MockPositionManagerPartial partialManager = new MockPositionManagerPartial();
+        FactoryV1 partialFactory = new FactoryV1(
+            owner,
+            0,
+            new TransferToHook(),
+            new BuyAndBurnHookV3(address(0x0)),
+            INonfungiblePositionManager(address(partialManager)),
+            IPermit2(address(mockPermit2)),
+            new TokenV1Factory(),
+            new DistributionV1Factory(),
+            new FeeVault(owner)
+        );
+
+        uint256 amount0 = 100 ether;
+        uint256 amount1 = 50 ether;
+        participationToken.mint(user, amount0);
+        distributionToken.mint(user, amount1);
+        vm.startPrank(user);
+        participationToken.approve(address(partialFactory), amount0);
+        distributionToken.approve(address(partialFactory), amount1);
+
+        // mins equal to the desired amounts: the partial manager only consumes desired - 10/-5,
+        // so the mint must revert
+        (uint256 min0, uint256 min1) = _sortedAmounts(amount0, amount1);
+        vm.expectRevert("Price slippage check");
+        partialFactory.createPoolAndAddLiquidity(
+            address(participationToken),
+            address(distributionToken),
+            SQRT_PRICE_1_1,
+            amount0,
+            amount1,
+            min0,
+            min1,
+            true,
+            _emptyPermit2(),
+            _emptyPermit2()
+        );
+        vm.stopPrank();
+    }
+
+    /// @dev The caller's min amounts thread unchanged through both combined launch paths.
+    function testMinAmountsThreadThroughCombinedLaunches() public {
+        // token launch: the mins are per role, but land in the sorted MintParams slots
+        (address token,) = _createTokenAndLiquidityAndDistribution(false, 0);
+        MintParams memory minted = mockPositionManager.getLastMintParams();
+        bool participationIsToken0 = address(participationToken) < token;
+        assertEq(minted.amount0Min, participationIsToken0 ? 100 ether : 50 ether);
+        assertEq(minted.amount1Min, participationIsToken0 ? 50 ether : 100 ether);
+
+        // liquidity launch of an existing token
+        _createLiquidityAndDistribution(false, false, 0);
+        (uint256 min0, uint256 min1) = _sortedAmounts(100 ether, 50 ether);
+        minted = mockPositionManager.getLastMintParams();
+        assertEq(minted.amount0Min, min0);
+        assertEq(minted.amount1Min, min1);
     }
 
     // --- createLiquidityAndDistribution tests ---
@@ -388,6 +620,8 @@ contract FactoryV1LiquidityTest is Test {
             SQRT_PRICE_1_1,
             participationAmount,
             distributionTokenAmountDesired,
+            participationAmount, // min: the mock consumes the desired amounts in full
+            distributionTokenAmountDesired,
             config,
             buyBackAndBurnShareBps,
             participationPermit2,
@@ -399,7 +633,7 @@ contract FactoryV1LiquidityTest is Test {
     function testCreateLiquidityAndDistributionWithAllowance() public {
         (address pool, address distributor) = _createLiquidityAndDistribution(false, false, 0);
 
-        assertEq(pool, address(mockPositionManager));
+        assertEq(pool, address(mockPositionManager.pool()));
 
         // participation token fully consumed into LP (held by mock position manager)
         assertEq(participationToken.balanceOf(user), 0);
@@ -417,7 +651,7 @@ contract FactoryV1LiquidityTest is Test {
         (address pool, address distributor) = _createLiquidityAndDistribution(true, true, 0);
 
         // Same final state as the allowance path.
-        assertEq(pool, address(mockPositionManager));
+        assertEq(pool, address(mockPositionManager.pool()));
 
         assertEq(participationToken.balanceOf(user), 0);
         assertEq(participationToken.balanceOf(address(factory)), 0);
@@ -456,7 +690,7 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert();
         factory.createLiquidityAndDistribution(
-            SQRT_PRICE_1_1, 100 ether, 50 ether, config, 0, _emptyPermit2(), _emptyPermit2()
+            SQRT_PRICE_1_1, 100 ether, 50 ether, 0, 0, config, 0, _emptyPermit2(), _emptyPermit2()
         );
     }
 
@@ -495,6 +729,8 @@ contract FactoryV1LiquidityTest is Test {
             SQRT_PRICE_1_1,
             participationAmount,
             distributionTokenAmountDesired,
+            0,
+            0, // no min: the partial manager consumes less than desired, mins must not block the mint
             config,
             0,
             _emptyPermit2(),
@@ -502,7 +738,7 @@ contract FactoryV1LiquidityTest is Test {
         );
         vm.stopPrank();
 
-        assertEq(pool, address(partialManager));
+        assertEq(pool, address(partialManager.pool()));
 
         // token0 consumes desired - 10 ether, token1 consumes desired - 5 ether;
         // the factory refunds each leftover to the user
@@ -546,7 +782,15 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 0, 500));
         factory.createTokenAndLiquidityAndDistribution(
-            _tokenConfig(allocations), SQRT_PRICE_1_1, 100 ether, 50 ether, config, 0, participationPermit2
+            _tokenConfig(allocations),
+            SQRT_PRICE_1_1,
+            100 ether,
+            50 ether,
+            100 ether,
+            50 ether,
+            config,
+            0,
+            participationPermit2
         );
 
         // 499 share — one bps below the minimum
@@ -554,7 +798,15 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 499, 500));
         factory.createTokenAndLiquidityAndDistribution(
-            _tokenConfig(allocations), SQRT_PRICE_1_1, 100 ether, 50 ether, config, 499, participationPermit2
+            _tokenConfig(allocations),
+            SQRT_PRICE_1_1,
+            100 ether,
+            50 ether,
+            100 ether,
+            50 ether,
+            config,
+            499,
+            participationPermit2
         );
     }
 
@@ -594,7 +846,15 @@ contract FactoryV1LiquidityTest is Test {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 110, 500));
         factory.createTokenAndLiquidityAndDistribution(
-            _tokenConfig(allocations), SQRT_PRICE_1_1, 100 ether, 50 ether, config, 500, _emptyPermit2()
+            _tokenConfig(allocations),
+            SQRT_PRICE_1_1,
+            100 ether,
+            50 ether,
+            100 ether,
+            50 ether,
+            config,
+            500,
+            _emptyPermit2()
         );
     }
 
@@ -622,6 +882,8 @@ contract FactoryV1LiquidityTest is Test {
             SQRT_PRICE_1_1,
             participationAmount,
             distributionTokenAmountDesired,
+            participationAmount,
+            distributionTokenAmountDesired,
             config,
             0,
             _participationPermit2(participationAmount),
@@ -634,6 +896,8 @@ contract FactoryV1LiquidityTest is Test {
         vm.expectRevert(abi.encodeWithSelector(FactoryV1.BuyBackAndBurnShareBelowMinBps.selector, 499, 500));
         factory.createLiquidityAndDistribution(
             SQRT_PRICE_1_1,
+            participationAmount,
+            distributionTokenAmountDesired,
             participationAmount,
             distributionTokenAmountDesired,
             config,
@@ -692,16 +956,55 @@ contract MockPermit2 is IPermit2 {
     }
 }
 
-/// @notice Minimal NonfungiblePositionManager mock: pulls the desired amounts and returns them.
+/// @notice Minimal V3 pool mock: exposes `slot0()` with a price that starts uninitialized (0), like a
+///         real pool before `initialize`.
+contract MockV3Pool {
+    uint160 public sqrtPriceX96;
+
+    function initialize(uint160 _sqrtPriceX96) external {
+        require(sqrtPriceX96 == 0, "pool already initialized");
+        sqrtPriceX96 = _sqrtPriceX96;
+    }
+
+    function slot0() external view returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
+        return (sqrtPriceX96, 0, 0, 0, 0, 0, true);
+    }
+}
+
+/// @notice Minimal NonfungiblePositionManager mock: holds a mock pool, pulls the desired amounts and
+///         returns them. `createAndInitializePoolIfNecessary` mimics the real behaviour: an existing
+///         initialized pool is returned untouched, otherwise the pool is initialized with the requested price.
 contract MockPositionManager {
-    function createAndInitializePoolIfNecessary(address, address, uint24, uint160) external view returns (address) {
-        return address(this);
+    MockV3Pool public pool;
+    MintParams public lastMintParams;
+
+    constructor() {
+        pool = new MockV3Pool();
+    }
+
+    /// @dev public struct getters return tuples, so expose the stored params explicitly
+    function getLastMintParams() external view returns (MintParams memory) {
+        return lastMintParams;
+    }
+
+    function createAndInitializePoolIfNecessary(address, address, uint24, uint160 sqrtPriceX96)
+        external
+        returns (address)
+    {
+        if (pool.sqrtPriceX96() == 0) pool.initialize(sqrtPriceX96);
+        return address(pool);
     }
 
     function mint(MintParams calldata params)
         external
         returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
     {
+        // mimic the real NFPM price-slippage check so the caller's min amounts are actually enforced
+        if (params.amount0Desired < params.amount0Min || params.amount1Desired < params.amount1Min) {
+            revert("Price slippage check");
+        }
+        lastMintParams = params;
+
         IERC20(params.token0).transferFrom(msg.sender, address(this), params.amount0Desired);
         IERC20(params.token1).transferFrom(msg.sender, address(this), params.amount1Desired);
         return (1, 1, params.amount0Desired, params.amount1Desired);
@@ -711,8 +1014,18 @@ contract MockPositionManager {
 /// @dev Like MockPositionManager but consumes less than desired, leaving unused
 ///      allowance on the factory (what the real NFPM can do when pool liquidity limits the mint).
 contract MockPositionManagerPartial {
-    function createAndInitializePoolIfNecessary(address, address, uint24, uint160) external view returns (address) {
-        return address(this);
+    MockV3Pool public pool;
+
+    constructor() {
+        pool = new MockV3Pool();
+    }
+
+    function createAndInitializePoolIfNecessary(address, address, uint24, uint160 sqrtPriceX96)
+        external
+        returns (address)
+    {
+        if (pool.sqrtPriceX96() == 0) pool.initialize(sqrtPriceX96);
+        return address(pool);
     }
 
     function mint(MintParams calldata params)
@@ -721,6 +1034,9 @@ contract MockPositionManagerPartial {
     {
         uint256 pull0 = params.amount0Desired - 10 ether;
         uint256 pull1 = params.amount1Desired - 5 ether;
+        // mimic the real NFPM price-slippage check so the caller's min amounts are actually enforced
+        if (pull0 < params.amount0Min || pull1 < params.amount1Min) revert("Price slippage check");
+
         IERC20(params.token0).transferFrom(msg.sender, address(this), pull0);
         IERC20(params.token1).transferFrom(msg.sender, address(this), pull1);
         return (1, 1, uint128(pull0), pull1);

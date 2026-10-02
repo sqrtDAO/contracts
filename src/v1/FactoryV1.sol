@@ -13,6 +13,7 @@ import {BuyAndBurnHookV3} from "src/utils/hooks/BuyAndBurnHookV3.sol";
 import {FeeVault} from "src/utils/FeeVault.sol";
 import {MintParams} from "../external-interfaces/INonfungiblePositionManager.sol";
 import {INonfungiblePositionManager} from "../external-interfaces/INonfungiblePositionManager.sol";
+import {IUniswapV3Pool} from "../external-interfaces/IUniswapV3Pool.sol";
 import {SharesLib, Share} from "src/utils/Shares.sol";
 import {Hook} from "src/utils/Hook.sol";
 import {IPermit2} from "../external-interfaces/IPermit2.sol";
@@ -116,7 +117,16 @@ contract FactoryV1 is Ownable {
         }
     }
 
-    /// @dev LP tokens are sent to a dead address (burned)
+    /// @dev LP tokens are sent to a dead address (burned). After pool initialization the on-chain pool price is
+    ///      verified to be exactly `_sqrtPriceX96`, so a pre-created pool with a different price can never be
+    ///      adopted by this launch (front-run protection)
+    /// @param _participationToken token participants pay with
+    /// @param _distributionToken token being distributed
+    /// @param _sqrtPriceX96 initial pool price; the launch also reverts if the pool already exists with any other price
+    /// @param _participationTokenAmountDesired maximum amount of the participation token to deposit into the pool
+    /// @param _distributionTokenAmountDesired maximum amount of the distribution token to deposit into the pool
+    /// @param _amount0Min minimum amount of token0 (tokens sorted) that must be deposited — slippage protection
+    /// @param _amount1Min minimum amount of token1 (tokens sorted) that must be deposited — slippage protection
     /// @param _pullIn if false, distribution token is not pulled (factory already has it)
     /// @param _participationPermit2 empty signature (= no permit2) falls back to allowance-based safeTransferFrom
     /// @param _distributionPermit2 empty signature (= no permit2) falls back to allowance-based safeTransferFrom
@@ -126,6 +136,8 @@ contract FactoryV1 is Ownable {
         uint160 _sqrtPriceX96,
         uint256 _participationTokenAmountDesired,
         uint256 _distributionTokenAmountDesired,
+        uint256 _amount0Min,
+        uint256 _amount1Min,
         bool _pullIn,
         Permit2Data memory _participationPermit2,
         Permit2Data memory _distributionPermit2
@@ -181,6 +193,11 @@ contract FactoryV1 is Ownable {
 
         pool = POSITION_MANAGER.createAndInitializePoolIfNecessary(token0, token1, LIQUIDITY_POOL_FEE, _sqrtPriceX96);
 
+        // front-run protection: `createAndInitializePoolIfNecessary` no-ops when the pool already exists,
+        // so make sure the on-chain price is exactly the one the caller asked for
+        (uint160 poolSqrtPriceX96,,,,,,) = IUniswapV3Pool(pool).slot0();
+        require(poolSqrtPriceX96 == _sqrtPriceX96, "pool already initialized with a different price");
+
         MintParams memory params = MintParams({
             token0: token0,
             token1: token1,
@@ -189,8 +206,8 @@ contract FactoryV1 is Ownable {
             tickUpper: 887220,
             amount0Desired: amount0Desired,
             amount1Desired: amount1Desired,
-            amount0Min: 0,
-            amount1Min: 0,
+            amount0Min: _amount0Min,
+            amount1Min: _amount1Min,
             recipient: 0x000000000000000000000000000000000000dEaD, // burning LP tokens
             deadline: type(uint256).max
         });
@@ -216,11 +233,21 @@ contract FactoryV1 is Ownable {
     /// @notice allocate token for Factory contract (this contract) as much as totalDistributionAmount + _distributionTokenAmountDesired
     ///         with startTime = 0 and duration = 0 so tokens are minted to this contract at deployment
     /// @param _tokenConfig token configuration for the new token (see `TokenConfig`)
+    /// @param _sqrtPriceX96 initial pool price; the launch reverts if the pool already exists with a different price
+    /// @param _participationTokenAmountDesired maximum amount of the participation token to deposit into the pool
+    /// @param _distributionTokenAmountDesired maximum amount of the new token to deposit into the pool
+    /// @param _participationTokenAmountMin minimum amount of the participation token to deposit — slippage protection
+    /// @param _distributionTokenAmountMin minimum amount of the new token to deposit — slippage protection
+    /// @param _config distributor configuration (see `DistributorConfig`)
+    /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 share routed to the buy&burn hook; reverts if below the owner-configured minimum (config().buyBackAndBurnMinBps) — zero is only allowed while that minimum is zero (then nothing is injected). Make sure shares sum up to 100% after buyAndBurn injection
+    /// @param _participationPermit2 empty signature (= no permit2) falls back to allowance-based safeTransferFrom
     function createTokenAndLiquidityAndDistribution(
         TokenConfig memory _tokenConfig,
         uint160 _sqrtPriceX96,
         uint256 _participationTokenAmountDesired,
         uint256 _distributionTokenAmountDesired,
+        uint256 _participationTokenAmountMin,
+        uint256 _distributionTokenAmountMin,
         DistributorConfig memory _config,
         uint256 _buyBackAndBurnShareBps,
         Permit2Data calldata _participationPermit2
@@ -228,12 +255,20 @@ contract FactoryV1 is Ownable {
         tokenAddress = createToken(_tokenConfig);
         _config.distributionToken = tokenAddress;
 
+        // the caller cannot know the new token's address up front, so the mins are given per role
+        // and mapped onto the sorted (token0, token1) order here
+        (uint256 amount0Min, uint256 amount1Min) = _config.participationToken < tokenAddress
+            ? (_participationTokenAmountMin, _distributionTokenAmountMin)
+            : (_distributionTokenAmountMin, _participationTokenAmountMin);
+
         createPoolAndAddLiquidity(
             _config.participationToken,
             tokenAddress,
             _sqrtPriceX96,
             _participationTokenAmountDesired,
             _distributionTokenAmountDesired,
+            amount0Min,
+            amount1Min,
             false,
             _participationPermit2,
             _emptyPermit2()
@@ -251,23 +286,39 @@ contract FactoryV1 is Ownable {
     /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 share routed to the buy&burn hook; reverts if below the owner-configured minimum (config().buyBackAndBurnMinBps) — zero is only allowed while that minimum is zero (then nothing is injected). Make sure shares sum up to 100% after buyAndBurn injection
     /// @notice unlike createTokenAndLiquidityAndDistribution factory contract doesn't hold any allocation of the distribution token
     ///         so sender pays both liquidity distribution tokens and totalDistributionAmount
+    /// @param _sqrtPriceX96 initial pool price; the launch reverts if the pool already exists with a different price
+    /// @param _participationTokenAmountDesired maximum amount of the participation token to deposit into the pool
+    /// @param _distributionTokenAmountDesired maximum amount of the distribution token to deposit into the pool
+    /// @param _participationTokenAmountMin minimum amount of the participation token to deposit — slippage protection
+    /// @param _distributionTokenAmountMin minimum amount of the distribution token to deposit — slippage protection
+    /// @param _config distributor configuration (see `DistributorConfig`)
+    /// @param _buyBackAndBurnShareBps (amountIn * share.shareBps) / 10000 share routed to the buy&burn hook; reverts if below the owner-configured minimum (config().buyBackAndBurnMinBps) — zero is only allowed while that minimum is zero (then nothing is injected). Make sure shares sum up to 100% after buyAndBurn injection
     /// @param _participationPermit2 empty signature (= no permit2) falls back to allowance-based safeTransferFrom
     /// @param _distributionPermit2 empty signature (= no permit2) falls back to allowance-based safeTransferFrom
     function createLiquidityAndDistribution(
         uint160 _sqrtPriceX96,
         uint256 _participationTokenAmountDesired,
         uint256 _distributionTokenAmountDesired,
+        uint256 _participationTokenAmountMin,
+        uint256 _distributionTokenAmountMin,
         DistributorConfig memory _config,
         uint256 _buyBackAndBurnShareBps,
         Permit2Data calldata _participationPermit2,
         Permit2Data calldata _distributionPermit2
     ) public returns (address pool, address distributorAddress) {
+        // mins are given per role (like the desired amounts) and mapped onto the sorted (token0, token1) order
+        (uint256 amount0Min, uint256 amount1Min) = _config.participationToken < _config.distributionToken
+            ? (_participationTokenAmountMin, _distributionTokenAmountMin)
+            : (_distributionTokenAmountMin, _participationTokenAmountMin);
+
         (pool,,,,) = createPoolAndAddLiquidity(
             _config.participationToken,
             _config.distributionToken,
             _sqrtPriceX96,
             _participationTokenAmountDesired,
             _distributionTokenAmountDesired,
+            amount0Min,
+            amount1Min,
             true,
             _participationPermit2,
             _distributionPermit2
