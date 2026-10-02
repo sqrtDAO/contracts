@@ -9,6 +9,7 @@ import {DistributionV1Factory} from "../src/v1/DistributionV1Factory.sol";
 import {DistributorV1, DistributorConfig, ReleasePolicy} from "../src/v1/DistributorV1.sol";
 import {TransferToHook} from "../src/utils/hooks/TransferToHook.sol";
 import {BuyAndBurnHookV3} from "../src/utils/hooks/BuyAndBurnHookV3.sol";
+import {EthParticipationRouter} from "../src/v1/EthParticipationRouter.sol";
 import {INonfungiblePositionManager} from "../src/external-interfaces/INonfungiblePositionManager.sol";
 import {IPermit2} from "../src/external-interfaces/IPermit2.sol";
 import {FixedEmission, FixedEmissionConfig} from "../src/utils/emission-function/FixedEmission.sol";
@@ -31,6 +32,7 @@ contract FactoryV1Script is Script {
         address positionManager = vm.envAddress("POSITION_MANAGER");
         address permit2 = vm.envAddress("PERMIT2");
         address swapRouter = vm.envAddress("SWAP_ROUTER");
+        address weth = vm.envAddress("WETH");
 
         uint256 pk = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(pk);
@@ -90,6 +92,9 @@ contract FactoryV1Script is Script {
         TransferToHook transferToHook = new TransferToHook();
         BuyAndBurnHookV3 buyAndBurnHook = new BuyAndBurnHookV3(swapRouter);
 
+        // ETH participation entry point (wraps msg.value into WETH and forwards to DistributorV1.participate)
+        EthParticipationRouter ethParticipationRouter = new EthParticipationRouter(weth);
+
         // Child deployers
         TokenV1Factory tokenFactory = new TokenV1Factory();
         DistributionV1Factory distributorFactory = new DistributionV1Factory();
@@ -125,6 +130,8 @@ contract FactoryV1Script is Script {
         console.log("sampleToken", address(sampleToken));
         console.log("transferToHook", address(transferToHook));
         console.log("buyAndBurnHook", address(buyAndBurnHook));
+        console.log("ethParticipationRouter", address(ethParticipationRouter));
+        console.log("weth", weth);
         console.log("feeVault", address(feeVault));
         console.log("tokenFactory", address(tokenFactory));
         console.log("distributorFactory", address(distributorFactory));
